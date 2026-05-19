@@ -1,0 +1,24 @@
+{# Shared period filter bar — include di setiap halaman laporan.
+   Expects: tgl_dari, tgl_sampai, preset_links, preset_ranges, base_url #}
+
+<div class="card filter-card">
+    <div class="filter-presets">
+        <span class="filter-label">Preset:</span>
+        {% for label, url in preset_links.items() %}
+        <a href="{{ url }}" class="btn btn-sm {% if request.url.path + '?' + request.url.query == url or (loop.first and not request.query_params.get('tgl_dari')) %}btn-primary{% else %}btn-secondary{% endif %}">
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+    <form method="get" action="{{ base_url }}" class="filter-custom">
+        <div class="filter-range">
+            <label>Dari</label>
+            <input type="date" name="tgl_dari" class="form-control form-control-sm"
+                   value="{{ tgl_dari }}" required>
+            <label>s/d</label>
+            <input type="date" name="tgl_sampai" class="form-control form-control-sm"
+                   value="{{ tgl_sampai }}" required>
+            <button type="submit" class="btn btn-sm btn-primary">Terapkan</button>
+        </div>
+    </form>
+</div>

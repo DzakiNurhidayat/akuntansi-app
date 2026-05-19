@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}{% if transaksi %}Edit Transaksi #{{ transaksi.id }}{% else %}Input Transaksi{% endif %} - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{% if transaksi %}Edit Transaksi <span class="text-muted">#{{ transaksi.id }}</span>{% else %}Input Transaksi{% endif %}</h1>
+        <p class="text-muted">Isi entri debet dan kredit — total harus seimbang sebelum bisa disimpan</p>
+    </div>
+    <a href="/transaksi" class="btn btn-secondary">← Kembali</a>
+</div>
+
+{% if errors %}
+<div class="alert alert-error">
+    {% for err in errors %}<div>• {{ err }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<form method="post"
+      action="{% if transaksi %}/transaksi/{{ transaksi.id }}/edit{% else %}/transaksi/tambah{% endif %}"
+      id="form-transaksi">
+
+    {# ── Header ── #}
+    <div class="card" style="margin-bottom:1.25rem;">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="tanggal">Tanggal <span class="required">*</span></label>
+                <input type="date" id="tanggal" name="tanggal" class="form-control" required
+                       value="{{ (transaksi.tanggal.isoformat() if transaksi) or form_data.get('tanggal', tanggal_default) }}">
+                <small class="help-text">Periode ditentukan otomatis dari bulan tanggal ini</small>
+            </div>
+
+            <div class="form-group">
+                <label for="jenis">Jenis <span class="required">*</span></label>
+                {% set selected_jenis = (transaksi.jenis if transaksi) or form_data.get('jenis', 'umum') %}
+                <select id="jenis" name="jenis" class="form-control" required>
+                    {% for j in jenis_input %}
+                    <option value="{{ j }}" {% if selected_jenis == j %}selected{% endif %}>
+                        {{ jenis_label[j] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="keterangan">Keterangan</label>
+            <input type="text" id="keterangan" name="keterangan" class="form-control"
+                   placeholder="Deskripsi singkat transaksi" maxlength="500"
+                   value="{{ (transaksi.keterangan if transaksi) or form_data.get('keterangan', '') }}">
+        </div>
+    </div>
+
+    {# ── Entri Jurnal ── #}
+    <div class="card" style="padding:0; overflow:hidden;">
+        <div class="table-group-header" style="justify-content:space-between;">
+            <span style="font-weight:600; color:#2c3e50;">Entri Jurnal</span>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addRow()">+ Tambah Baris</button>
+        </div>
+
+        <div class="table-wrapper">
+            <table class="table" id="entries-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px; text-align:center;">#</th>
+                        <th>Akun</th>
+                        <th style="width:185px; text-align:right;">Debet (Rp)</th>
+                        <th style="width:185px; text-align:right;">Kredit (Rp)</th>
+                        <th style="width:44px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="entries-tbody"></tbody>
+                <tfoot>
+                    <tr class="totals-row">
+                        <td colspan="2" style="text-align:right; font-weight:600; padding:0.75rem 1rem;">Total</td>
+                        <td style="text-align:right; font-weight:700;" id="total-debet">Rp 0</td>
+                        <td style="text-align:right; font-weight:700;" id="total-kredit">Rp 0</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="balance-bar">
+            <span id="balance-indicator" class="balance-indicator unbalanced">Belum ada entri</span>
+            <div class="form-actions" style="border:none; padding:0; margin:0;">
+                <button type="submit" id="submit-btn" class="btn btn-primary" disabled>
+                    {% if transaksi %}Simpan Perubahan{% else %}Simpan Transaksi{% endif %}
+                </button>
+                <a href="/transaksi" class="btn btn-secondary">Batal</a>
+            </div>
+        </div>
+    </div>
+
+</form>
+
+<script>
+const akunData = {{ akun_json | tojson }};
+
+function rupiah(n) {
+    return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+}
+
+function renderSelect(selectedValue) {
+    const groups = [
+        { label: 'Aset',       jenis: 'aset' },
+        { label: 'Kewajiban',  jenis: 'kewajiban' },
+        { label: 'Modal',      jenis: 'modal' },
+        { label: 'Pendapatan', jenis: 'pendapatan' },
+        { label: 'Beban',      jenis: 'beban' },
+    ];
+    let html = '<select name="kode_akun" class="form-control akun-select" required>';
+    html += '<option value="">— Pilih Akun —</option>';
+    for (const g of groups) {
+        const items = akunData.filter(a => a.jenis_akun === g.jenis);
+        if (!items.length) continue;
+        html += `<optgroup label="${g.label}">`;
+        for (const a of items) {
+            const sel = a.kode_akun === selectedValue ? ' selected' : '';
+            html += `<option value="${a.kode_akun}"${sel}>${a.kode_akun} — ${a.nama_akun}</option>`;
+        }
+        html += '</optgroup>';
+    }
+    html += '</select>';
+    return html;
+}
+
+function addRow(kode = '', debet = 0, kredit = 0) {
+    const tbody = document.getElementById('entries-tbody');
+    const idx = tbody.rows.length;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td class="row-num" style="text-align:center; color:#7f8c8d; font-size:0.8rem;">${idx + 1}</td>
+        <td>${renderSelect(kode)}</td>
+        <td style="padding:0.4rem 0.5rem;">
+            <input type="number" name="debet" class="form-control amount-input"
+                   min="0" step="1" value="${debet || ''}" placeholder="0"
+                   oninput="onAmountInput(this)" style="text-align:right;">
+        </td>
+        <td style="padding:0.4rem 0.5rem;">
+            <input type="number" name="kredit" class="form-control amount-input"
+                   min="0" step="1" value="${kredit || ''}" placeholder="0"
+                   oninput="onAmountInput(this)" style="text-align:right;">
+        </td>
+        <td style="text-align:center; padding:0.4rem;">
+            <button type="button" class="btn btn-sm btn-danger"
+                    onclick="removeRow(this)" title="Hapus baris">&times;</button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+    updateRowNumbers();
+    updateTotals();
+}
+
+function removeRow(btn) {
+    if (document.getElementById('entries-tbody').rows.length <= 2) {
+        alert('Minimal 2 baris entri jurnal.');
+        return;
+    }
+    btn.closest('tr').remove();
+    updateRowNumbers();
+    updateTotals();
+}
+
+function updateRowNumbers() {
+    document.querySelectorAll('#entries-tbody .row-num').forEach((el, i) => {
+        el.textContent = i + 1;
+    });
+}
+
+function onAmountInput(input) {
+    // Auto-fill partner row hanya jika tepat 2 baris
+    const rows = Array.from(document.querySelectorAll('#entries-tbody tr'));
+    if (rows.length === 2) {
+        const myRow = input.closest('tr');
+        const partnerRow = rows.find(r => r !== myRow);
+        const isDebet = input.name === 'debet';
+        const partnerField = partnerRow.querySelector(`[name="${isDebet ? 'kredit' : 'debet'}"]`);
+        const val = parseFloat(input.value) || 0;
+        partnerField.value = val > 0 ? val : '';
+    }
+    updateTotals();
+}
+
+function updateTotals() {
+    let totalD = 0, totalK = 0;
+    document.querySelectorAll('#entries-tbody tr').forEach(tr => {
+        totalD += parseFloat(tr.querySelector('[name="debet"]').value) || 0;
+        totalK += parseFloat(tr.querySelector('[name="kredit"]').value) || 0;
+    });
+
+    document.getElementById('total-debet').textContent = rupiah(totalD);
+    document.getElementById('total-kredit').textContent = rupiah(totalK);
+
+    const ind = document.getElementById('balance-indicator');
+    const btn = document.getElementById('submit-btn');
+    const hasEntries = totalD > 0 || totalK > 0;
+    const balanced = hasEntries && Math.abs(totalD - totalK) < 0.01;
+
+    if (!hasEntries) {
+        ind.textContent = 'Belum ada entri';
+        ind.className = 'balance-indicator unbalanced';
+    } else if (balanced) {
+        ind.textContent = '✓ Seimbang — siap disimpan';
+        ind.className = 'balance-indicator balanced';
+    } else {
+        ind.textContent = `✗ Belum seimbang — selisih ${rupiah(Math.abs(totalD - totalK))}`;
+        ind.className = 'balance-indicator unbalanced';
+    }
+    btn.disabled = !balanced;
+}
+
+// ── Auto-set tanggal berdasarkan jenis ──
+const tanggalDefault = document.getElementById('tanggal').value;
+
+function setLastDayOfMonth() {
+    const dateInput = document.getElementById('tanggal');
+    const raw = dateInput.value;
+    const ref = raw ? new Date(raw + 'T00:00:00') : new Date();
+    const last = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+    const yyyy = last.getFullYear();
+    const mm   = String(last.getMonth() + 1).padStart(2, '0');
+    const dd   = String(last.getDate()).padStart(2, '0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+}
+
+document.getElementById('jenis').addEventListener('change', function () {
+    if (this.value === 'penyesuaian') {
+        setLastDayOfMonth();
+    } else {
+        document.getElementById('tanggal').value = tanggalDefault;
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    {% if entries_data %}
+    const rows = {{ entries_data | tojson }};
+    rows.forEach(r => addRow(r.kode_akun, r.debet, r.kredit));
+    {% else %}
+    addRow(); addRow();
+    {% endif %}
+});
+</script>
+{% endblock %}

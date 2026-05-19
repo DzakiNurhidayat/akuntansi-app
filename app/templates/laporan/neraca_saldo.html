@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Neraca Saldo - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Neraca Saldo</h1>
+        <p class="text-muted">
+            {{ tgl_dari.strftime('%d %b %Y') }} — {{ tgl_sampai.strftime('%d %b %Y') }}
+        </p>
+    </div>
+    <a href="/laporan/neraca-saldo/download?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}"
+       class="btn btn-secondary"
+       onclick="alert('Fitur download PDF belum tersedia.'); return false;">
+        ↓ Download PDF
+    </a>
+</div>
+
+{% set base_url = "/laporan/neraca-saldo" %}
+{% include "laporan/_filter_bar.html" %}
+
+{% if rows %}
+    {% if not seimbang %}
+    <div class="alert alert-error">
+        Peringatan: Total debet dan kredit tidak seimbang — periksa data transaksi.
+    </div>
+    {% endif %}
+
+    <div class="card table-card">
+        <div class="table-wrapper">
+            <table class="table neraca-table">
+                <thead>
+                    <tr>
+                        <th style="width:80px;">Kode</th>
+                        <th>Nama Akun</th>
+                        <th style="width:180px; text-align:right;">Debet (Rp)</th>
+                        <th style="width:180px; text-align:right;">Kredit (Rp)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td><code>{{ row.akun.kode_akun }}</code></td>
+                            <td>{{ row.akun.nama_akun }}</td>
+                            <td style="text-align:right; font-variant-numeric:tabular-nums;">
+                                {% if row.debet > 0 %}{{ row.debet | rupiah }}
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td style="text-align:right; font-variant-numeric:tabular-nums;">
+                                {% if row.kredit > 0 %}{{ row.kredit | rupiah }}
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="totals-row">
+                        <td colspan="2" style="text-align:right; font-weight:600; padding:.75rem 1rem;">
+                            Total
+                        </td>
+                        <td style="text-align:right; font-weight:700;">{{ sum_debet | rupiah }}</td>
+                        <td style="text-align:right; font-weight:700;">{{ sum_kredit | rupiah }}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="4" style="text-align:center; padding:.6rem 1rem;">
+                            {% if seimbang %}
+                            <span class="balance-indicator balanced" style="font-size:.85rem;">
+                                ✓ Neraca saldo seimbang
+                            </span>
+                            {% else %}
+                            <span class="balance-indicator unbalanced" style="font-size:.85rem;">
+                                ✗ Tidak seimbang — selisih {{ (sum_debet - sum_kredit) | abs | rupiah }}
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+{% else %}
+<div class="card" style="text-align:center; padding:2.5rem;">
+    <p class="text-muted">Tidak ada transaksi pada periode ini.</p>
+</div>
+{% endif %}
+{% endblock %}

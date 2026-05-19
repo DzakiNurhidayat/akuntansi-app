@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{% if akun %}Edit Akun {{ akun.kode_akun }}{% else %}Tambah Akun{% endif %} - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{% if akun %}Edit Akun{% else %}Tambah Akun{% endif %}</h1>
+        <p class="text-muted">
+            {% if akun %}Perbarui data akun {{ akun.kode_akun }}{% else %}Tambah akun baru ke Chart of Accounts{% endif %}
+        </p>
+    </div>
+    <a href="/akun" class="btn btn-secondary">← Kembali</a>
+</div>
+
+{% if msg %}
+<div class="alert alert-{{ msg_type }}">{{ msg }}</div>
+{% endif %}
+
+<div class="card form-card">
+    <form method="post" action="{% if akun %}/akun/{{ akun.kode_akun }}/edit{% else %}/akun/tambah{% endif %}">
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="kode_akun">Kode Akun <span class="required">*</span></label>
+                {% if akun %}
+                <input type="text" id="kode_akun" value="{{ akun.kode_akun }}" class="form-control" disabled>
+                {% else %}
+                <input type="text" id="kode_akun" name="kode_akun" class="form-control"
+                       placeholder="contoh: 111" maxlength="10" required
+                       value="{{ request.query_params.get('kode_akun', '') }}">
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="jenis_akun">Jenis Akun <span class="required">*</span></label>
+                <select id="jenis_akun" name="jenis_akun" class="form-control" required onchange="updateSaldo()">
+                    {% for j in jenis_choices %}
+                    <option value="{{ j }}"
+                        {% if akun and akun.jenis_akun == j %}selected
+                        {% elif not akun and loop.first %}selected{% endif %}>
+                        {{ j | capitalize }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="nama_akun">Nama Akun (ID) <span class="required">*</span></label>
+                <input type="text" id="nama_akun" name="nama_akun" class="form-control"
+                       placeholder="contoh: Kas" maxlength="100" required
+                       value="{{ akun.nama_akun if akun else '' }}">
+            </div>
+
+            <div class="form-group">
+                <label for="nama_akun_en">Nama Akun (EN)</label>
+                <input type="text" id="nama_akun_en" name="nama_akun_en" class="form-control"
+                       placeholder="contoh: Cash" maxlength="100"
+                       value="{{ akun.nama_akun_en if akun and akun.nama_akun_en else '' }}">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Saldo Normal</label>
+                <input type="hidden" id="saldo_normal" name="saldo_normal"
+                       value="{{ akun.saldo_normal if akun else 'debet' }}">
+                <div style="display:flex; align-items:center; gap:.6rem; height:38px;">
+                    <span id="saldo_display" class="badge"></span>
+                    <small class="help-text">Otomatis sesuai jenis akun (kontra = kebalikan)</small>
+                </div>
+            </div>
+
+            <div class="form-group checkboxes">
+                <label>Opsi Tambahan</label>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="is_kontra" name="is_kontra" value="true"
+                           {% if akun and akun.is_kontra %}checked{% endif %}
+                           onchange="updateSaldo()">
+                    <label for="is_kontra">Akun Kontra
+                        <small class="help-text">(contoh: Akumulasi Penyusutan, Prive)</small>
+                    </label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="is_active" name="is_active" value="true"
+                           {% if not akun or akun.is_active %}checked{% endif %}>
+                    <label for="is_active">Aktif</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {% if akun %}Simpan Perubahan{% else %}Tambah Akun{% endif %}
+            </button>
+            <a href="/akun" class="btn btn-secondary">Batal</a>
+        </div>
+    </form>
+</div>
+
+<script>
+const SALDO_DEFAULT = {
+    aset:       'debet',
+    beban:      'debet',
+    kewajiban:  'kredit',
+    modal:      'kredit',
+    pendapatan: 'kredit'
+};
+
+function updateSaldo() {
+    const jenis    = document.getElementById('jenis_akun').value;
+    const isKontra = document.getElementById('is_kontra').checked;
+
+    let saldo = SALDO_DEFAULT[jenis] || 'debet';
+    if (isKontra) saldo = (saldo === 'debet') ? 'kredit' : 'debet';
+
+    document.getElementById('saldo_normal').value = saldo;
+
+    const badge = document.getElementById('saldo_display');
+    badge.textContent = saldo === 'debet' ? 'Debet' : 'Kredit';
+    badge.className   = 'badge ' + (saldo === 'debet' ? 'badge-saldo-debet' : 'badge-saldo-kredit');
+}
+
+document.getElementById('jenis_akun').addEventListener('change', updateSaldo);
+
+// Init on page load
+updateSaldo();
+</script>
+{% endblock %}

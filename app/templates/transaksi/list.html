@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Jurnal Umum - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Jurnal Umum</h1>
+        <p class="text-muted">Daftar seluruh transaksi yang telah dicatat</p>
+    </div>
+    <a href="/transaksi/tambah" class="btn btn-primary">+ Input Transaksi</a>
+</div>
+
+{% if msg %}
+<div class="alert alert-{{ msg_type }}">{{ msg }}</div>
+{% endif %}
+
+<div class="filter-bar">
+    <span class="text-muted" style="font-size:0.875rem;">Filter jenis:</span>
+    <a href="/transaksi" class="btn btn-sm {% if not jenis_filter %}btn-primary{% else %}btn-secondary{% endif %}">Semua</a>
+    {% for j in jenis_input %}
+    <a href="/transaksi?jenis={{ j }}"
+       class="btn btn-sm {% if jenis_filter == j %}btn-primary{% else %}btn-secondary{% endif %}">
+        {{ jenis_label[j] }}
+    </a>
+    {% endfor %}
+</div>
+
+<div class="card table-card">
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width:50px">#</th>
+                    <th style="width:110px">Tanggal</th>
+                    <th>Keterangan</th>
+                    <th style="width:120px">Jenis</th>
+                    <th style="width:150px; text-align:right">Total</th>
+                    <th style="width:60px; text-align:center">Entri</th>
+                    <th style="width:130px">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in transaksi_list %}
+                <tr>
+                    <td class="text-muted">{{ t.id }}</td>
+                    <td>{{ t.tanggal.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ t.keterangan or '<em class="text-muted">-</em>' | safe }}</td>
+                    <td><span class="badge badge-jenis-{{ t.jenis }}">{{ jenis_label[t.jenis] }}</span></td>
+                    <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ t._total | rupiah }}</td>
+                    <td style="text-align:center;">{{ t.entries | length }}</td>
+                    <td>
+                        <div class="action-btns">
+                            <a href="/transaksi/{{ t.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                            {% if t.jenis not in ('penutup', 'pembalik') %}
+                            <form method="post" action="/transaksi/{{ t.id }}/hapus"
+                                  onsubmit="return confirm('Hapus transaksi #{{ t.id }} tanggal {{ t.tanggal }}?')">
+                                <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:2.5rem; color:#7f8c8d;">
+                        Belum ada transaksi.
+                        <a href="/transaksi/tambah">Input transaksi pertama</a>.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

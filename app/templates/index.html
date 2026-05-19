@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Selamat Datang!</h1>
+    <p>Aplikasi pencatatan akuntansi siklus lengkap.</p>
+    
+    <div class="stats">
+        <div class="stat-item">
+            <div class="stat-number">{{ total_akun }}</div>
+            <div class="stat-label">Total Akun</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ total_periode }}</div>
+            <div class="stat-label">Total Periode</div>
+        </div>
+    </div>
+    
+    <div class="status-info">
+        <p>✓ Aplikasi berjalan dengan baik</p>
+        <p>✓ Database terhubung</p>
+    </div>
+</div>
+{% endblock %}

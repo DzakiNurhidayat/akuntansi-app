@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Buku Besar - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Buku Besar</h1>
+        <p class="text-muted">
+            {{ tgl_dari.strftime('%d %b %Y') }} — {{ tgl_sampai.strftime('%d %b %Y') }}
+        </p>
+    </div>
+    <a href="/laporan/buku-besar/download?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}"
+       class="btn btn-secondary"
+       onclick="alert('Fitur download PDF belum tersedia.'); return false;">
+        ↓ Download PDF
+    </a>
+</div>
+
+{% set base_url = "/laporan/buku-besar" %}
+{% include "laporan/_filter_bar.html" %}
+
+{% if not ledger %}
+<div class="card" style="text-align:center; padding:2.5rem;">
+    <p class="text-muted">Tidak ada transaksi pada periode ini.</p>
+</div>
+{% endif %}
+
+{% for item in ledger %}
+<div class="card table-card" style="margin-bottom:1.25rem;">
+    <div class="table-group-header" style="justify-content:space-between; align-items:center;">
+        <div style="display:flex; gap:.75rem; align-items:center;">
+            <span class="badge badge-{{ item.akun.jenis_akun }}">{{ item.akun.jenis_akun | capitalize }}</span>
+            <span style="font-weight:600; color:#2c3e50;">
+                {{ item.akun.kode_akun }} — {{ item.akun.nama_akun }}
+            </span>
+            {% if item.akun.nama_akun_en %}
+            <span class="text-muted" style="font-size:.8rem;">({{ item.akun.nama_akun_en }})</span>
+            {% endif %}
+        </div>
+        <div style="font-size:.85rem; color:#7f8c8d;">
+            Saldo Normal: <strong>{{ item.akun.saldo_normal | capitalize }}</strong>
+            &nbsp;|&nbsp;
+            Saldo Akhir:
+            <strong class="{% if item.saldo_akhir >= 0 %}color-debet{% else %}color-kredit{% endif %}">
+                {{ item.saldo_akhir | abs | rupiah }}
+                ({% if item.saldo_akhir >= 0 %}{{ item.akun.saldo_normal | capitalize }}{% else %}Lawan{% endif %})
+            </strong>
+        </div>
+    </div>
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width:105px;">Tanggal</th>
+                    <th>Keterangan</th>
+                    <th style="width:60px; text-align:center;">Ref</th>
+                    <th style="width:150px; text-align:right;">Debet (Rp)</th>
+                    <th style="width:150px; text-align:right;">Kredit (Rp)</th>
+                    <th style="width:155px; text-align:right;">Saldo (Rp)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in item.rows %}
+                <tr>
+                    <td>{{ row.tanggal.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ row.keterangan or '—' }}</td>
+                    <td style="text-align:center; font-size:.82rem; font-weight:600;">
+                        <a href="/laporan/jurnal-umum?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&page={{ row.ref_page }}"
+                           style="color:#2980b9; text-decoration:none;"
+                           title="Lihat di Jurnal Umum halaman {{ row.ref_page }}">
+                            {{ row.ref }}
+                        </a>
+                    </td>
+                    <td style="text-align:right; font-variant-numeric:tabular-nums;">
+                        {% if row.debet > 0 %}{{ row.debet | rupiah }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="text-align:right; font-variant-numeric:tabular-nums;">
+                        {% if row.kredit > 0 %}{{ row.kredit | rupiah }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td style="text-align:right; font-variant-numeric:tabular-nums; font-weight:500;">
+                        {{ row.saldo | abs | rupiah }}
+                        {% if row.saldo < 0 %}<span class="text-muted" style="font-size:.75rem;">(K)</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

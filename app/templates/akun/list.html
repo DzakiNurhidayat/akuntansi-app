@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Daftar Akun - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Daftar Akun</h1>
+        <p class="text-muted">Chart of Accounts perusahaan jasa cleaning service</p>
+    </div>
+    <a href="/akun/tambah" class="btn btn-primary">+ Tambah Akun</a>
+</div>
+
+{% if msg %}
+<div class="alert alert-{{ msg_type }}">{{ msg }}</div>
+{% endif %}
+
+{% set jenis_label = {
+    'aset': 'Aset',
+    'kewajiban': 'Kewajiban',
+    'modal': 'Modal',
+    'pendapatan': 'Pendapatan',
+    'beban': 'Beban'
+} %}
+
+{% for jenis in jenis_choices %}
+    {% set kelompok = akun_list | selectattr("jenis_akun", "equalto", jenis) | list %}
+    {% if kelompok %}
+    <div class="card table-card">
+        <div class="table-group-header">
+            <span class="badge badge-{{ jenis }}">{{ jenis_label[jenis] }}</span>
+            <span class="text-muted">{{ kelompok | length }} akun</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width:90px">Kode</th>
+                        <th>Nama Akun</th>
+                        <th>Nama (EN)</th>
+                        <th style="width:90px">Saldo Normal</th>
+                        <th style="width:70px">Kontra</th>
+                        <th style="width:80px">Status</th>
+                        <th style="width:130px">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for akun in kelompok %}
+                    <tr class="{% if not akun.is_active %}row-inactive{% endif %}">
+                        <td><code>{{ akun.kode_akun }}</code></td>
+                        <td>{{ akun.nama_akun }}</td>
+                        <td class="text-muted">{{ akun.nama_akun_en or '-' }}</td>
+                        <td>
+                            <span class="badge badge-saldo-{{ akun.saldo_normal }}">
+                                {{ akun.saldo_normal | capitalize }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if akun.is_kontra %}
+                            <span class="badge badge-kontra">Ya</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if akun.is_active %}
+                            <span class="badge badge-active">Aktif</span>
+                            {% else %}
+                            <span class="badge badge-inactive">Nonaktif</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-btns">
+                                <a href="/akun/{{ akun.kode_akun }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                                <form method="post" action="/akun/{{ akun.kode_akun }}/hapus"
+                                      onsubmit="return confirm('Hapus akun {{ akun.kode_akun }} - {{ akun.nama_akun }}?')">
+                                    <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+
+{% if not akun_list %}
+<div class="card" style="text-align:center; padding: 3rem;">
+    <p class="text-muted">Belum ada akun. <a href="/akun/tambah">Tambah akun pertama</a>.</p>
+</div>
+{% endif %}
+{% endblock %}
