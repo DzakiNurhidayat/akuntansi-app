@@ -11,6 +11,11 @@
         {% endfor %}
     </div>
     <form method="get" action="{{ base_url }}" class="filter-custom">
+        {% if extra_hidden %}
+        {% for hname, hval in extra_hidden.items() %}
+        <input type="hidden" name="{{ hname }}" value="{{ hval }}">
+        {% endfor %}
+        {% endif %}
         <div class="filter-range">
             <label>Dari</label>
             <input type="date" name="tgl_dari" class="form-control form-control-sm"

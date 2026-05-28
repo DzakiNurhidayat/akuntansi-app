@@ -1,26 +1,137 @@
 {% extends "base.html" %}
-
 {% block title %}Dashboard - Cleaning Service Accounting{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>Selamat Datang!</h1>
-    <p>Aplikasi pencatatan akuntansi siklus lengkap.</p>
-    
-    <div class="stats">
-        <div class="stat-item">
-            <div class="stat-number">{{ total_akun }}</div>
-            <div class="stat-label">Total Akun</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">{{ total_periode }}</div>
-            <div class="stat-label">Total Periode</div>
-        </div>
+
+{% if not aktif %}
+<div class="alert alert-error">Belum ada periode. Silakan jalankan seed_data.py terlebih dahulu.</div>
+{% else %}
+
+{# ── Header: nama perusahaan + pilih periode ── #}
+<div class="page-header" style="margin-bottom:1.5rem; align-items:center;">
+    <div>
+        <h1 style="margin-bottom:.25rem;">{{ aktif.nama_perusahaan }}</h1>
+        <p class="text-muted">Ringkasan keuangan periode aktif</p>
     </div>
-    
-    <div class="status-info">
-        <p>✓ Aplikasi berjalan dengan baik</p>
-        <p>✓ Database terhubung</p>
+    <div style="display:flex; align-items:center; gap:.6rem;">
+        <label style="font-size:.875rem; font-weight:500; color:#2c3e50; white-space:nowrap;">Periode:</label>
+        <select class="form-control" style="width:auto; min-width:180px;"
+                onchange="window.location='/?periode_id='+this.value">
+            {% for p in periodes %}
+            <option value="{{ p.id }}" {% if aktif.id == p.id %}selected{% endif %}>
+                {{ bulan_nama[p.bulan] }} {{ p.tahun }}
+            </option>
+            {% endfor %}
+        </select>
     </div>
 </div>
+
+{# ── Statistik keuangan ── #}
+<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.25rem;">
+
+    <div class="card" style="padding:1.25rem 1.5rem; border-left:4px solid #2980b9;">
+        <div style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#1a5276; margin-bottom:.35rem;">Total Aset</div>
+        <div style="font-size:1.4rem; font-weight:700; color:#2980b9; font-variant-numeric:tabular-nums;">{{ stats.aset | rupiah }}</div>
+    </div>
+
+    <div class="card" style="padding:1.25rem 1.5rem; border-left:4px solid #e67e22;">
+        <div style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#784212; margin-bottom:.35rem;">Total Liabilitas</div>
+        <div style="font-size:1.4rem; font-weight:700; color:#e67e22; font-variant-numeric:tabular-nums;">{{ stats.kewajiban | rupiah }}</div>
+    </div>
+
+    <div class="card" style="padding:1.25rem 1.5rem; border-left:4px solid #27ae60;">
+        <div style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#1e8449; margin-bottom:.35rem;">Total Ekuitas</div>
+        <div style="font-size:1.4rem; font-weight:700; color:#27ae60; font-variant-numeric:tabular-nums;">{{ stats.modal | rupiah }}</div>
+    </div>
+
+    <div class="card" style="padding:1.25rem 1.5rem; border-left:4px solid #16a085;">
+        <div style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#0e6655; margin-bottom:.35rem;">Total Pendapatan</div>
+        <div style="font-size:1.4rem; font-weight:700; color:#16a085; font-variant-numeric:tabular-nums;">{{ stats.pendapatan | rupiah }}</div>
+    </div>
+
+    <div class="card" style="padding:1.25rem 1.5rem; border-left:4px solid #c0392b;">
+        <div style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#7b241c; margin-bottom:.35rem;">Total Beban</div>
+        <div style="font-size:1.4rem; font-weight:700; color:#c0392b; font-variant-numeric:tabular-nums;">{{ stats.beban | rupiah }}</div>
+    </div>
+
+    <div class="card" style="padding:1.25rem 1.5rem; border-left:4px solid {% if laba_rugi >= 0 %}#8e44ad{% else %}#e74c3c{% endif %};">
+        <div style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:{% if laba_rugi >= 0 %}#6c3483{% else %}#922b21{% endif %}; margin-bottom:.35rem;">Laba Rugi</div>
+        <div style="font-size:1.4rem; font-weight:700; color:{% if laba_rugi >= 0 %}#8e44ad{% else %}#e74c3c{% endif %}; font-variant-numeric:tabular-nums;">
+            {% if laba_rugi >= 0 %}{{ laba_rugi | rupiah }}{% else %}({{ (laba_rugi * -1) | rupiah }}){% endif %}
+        </div>
+    </div>
+
+</div>
+
+{# ── Menu cepat ── #}
+<div class="card" style="margin-bottom:1.25rem; padding:1.5rem; text-align:center;">
+    <p style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#7f8c8d; margin-bottom:1rem;">
+        Menu Cepat
+    </p>
+    <div style="display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center;">
+        <a href="/transaksi/tambah" class="btn btn-primary">+ Tambah Transaksi</a>
+        <a href="/laporan/jurnal-umum" class="btn btn-secondary">Jurnal Umum</a>
+        <a href="/laporan/buku-besar" class="btn btn-secondary">Buku Besar</a>
+        <a href="/laporan/neraca-saldo" class="btn btn-secondary">Neraca Saldo</a>
+    </div>
+</div>
+
+{# ── Unduh laporan keuangan ── #}
+<div class="card" style="padding:1.5rem;">
+    <p style="font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#7f8c8d; margin-bottom:1rem;">
+        Unduh Laporan PDF
+    </p>
+
+    <div style="display:flex; align-items:center; gap:.75rem; margin-bottom:1rem; flex-wrap:wrap;">
+        <label style="font-size:.875rem; font-weight:500; color:#2c3e50; white-space:nowrap;">Periode:</label>
+        <select id="periode-dl" class="form-control" style="width:auto; min-width:180px;">
+            {% for p in periodes %}
+            <option value="{{ p.id }}"
+                    data-tahun="{{ p.tahun }}"
+                    data-bulan="{{ '%02d' % p.bulan }}"
+                    {% if aktif.id == p.id %}selected{% endif %}>
+                {{ bulan_nama[p.bulan] }} {{ p.tahun }} — {{ p.nama_perusahaan }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <p style="font-size:.78rem; color:#7f8c8d; margin-bottom:.5rem;">Laporan Akuntansi</p>
+    <div style="display:flex; gap:.6rem; flex-wrap:wrap; margin-bottom:.9rem;">
+        <button class="btn btn-sm btn-secondary" onclick="unduh('/laporan/jurnal-umum')">↓ Jurnal Umum</button>
+        <button class="btn btn-sm btn-secondary" onclick="unduh('/laporan/buku-besar')">↓ Buku Besar</button>
+        <button class="btn btn-sm btn-secondary" onclick="unduh('/laporan/neraca-saldo')">↓ Neraca Saldo</button>
+        <button class="btn btn-sm btn-secondary" onclick="unduh('/laporan/worksheet')">↓ Kertas Kerja</button>
+    </div>
+
+    <p style="font-size:.78rem; color:#7f8c8d; margin-bottom:.5rem;">Laporan Keuangan</p>
+    <div style="display:flex; gap:.6rem; flex-wrap:wrap;">
+        <button class="btn btn-sm btn-secondary" onclick="unduhKeuangan('laba-rugi')">↓ Laba Rugi</button>
+        <button class="btn btn-sm btn-secondary" onclick="unduhKeuangan('ekuitas')">↓ Ekuitas Pemilik</button>
+        <button class="btn btn-sm btn-secondary" onclick="unduhKeuangan('neraca')">↓ Neraca</button>
+    </div>
+</div>
+
+<script>
+function _getDates() {
+    const sel = document.getElementById('periode-dl');
+    const opt = sel.options[sel.selectedIndex];
+    const tahun = opt.dataset.tahun;
+    const bulan = opt.dataset.bulan;
+    const lastDay = new Date(parseInt(tahun), parseInt(bulan), 0).getDate();
+    const dari    = `${tahun}-${bulan}-01`;
+    const sampai  = `${tahun}-${bulan}-${String(lastDay).padStart(2,'0')}`;
+    return { dari, sampai };
+}
+function unduh(base) {
+    const { dari, sampai } = _getDates();
+    window.open(`${base}?tgl_dari=${dari}&tgl_sampai=${sampai}&format=pdf`, '_blank');
+}
+function unduhKeuangan(tab) {
+    const { dari, sampai } = _getDates();
+    window.open(`/laporan/keuangan?tab=${tab}&tgl_dari=${dari}&tgl_sampai=${sampai}&format=pdf`, '_blank');
+}
+</script>
+
+{% endif %}
 {% endblock %}

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="id" xmlns:pdf="http://namespaces.reportlab.com/reportlab/xhtml/pdf/0.1/">
+<head>
+<meta charset="UTF-8">
+<style>
+@page {
+    size: A4 {{ 'landscape' if landscape else 'portrait' }};
+    margin: 1.5cm 1.5cm 2cm;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9pt;
+    color: #111;
+    line-height: 1.45;
+}
+
+/* ── Footer halaman (xhtml2pdf: posisi fixed di bawah) ── */
+#footer {
+    position: fixed;
+    bottom: -15mm;
+    left: 0;
+    right: 0;
+    text-align: right;
+    font-size: 7pt;
+    color: #888;
+}
+
+/* ── Kop Surat ── */
+.kop {
+    text-align: center;
+    margin-bottom: 10pt;
+    padding-bottom: 7pt;
+    border-bottom: 1.5pt solid #111;
+}
+.kop-company { font-size: 13pt; font-weight: bold; margin-bottom: 2pt; }
+.kop-title   { font-size: 11pt; font-weight: bold; margin-bottom: 2pt; }
+.kop-period  { font-size: 8.5pt; color: #444; }
+
+/* ── Tabel umum ── */
+table { width: 100%; border-collapse: collapse; }
+th {
+    background: #e2e2e2;
+    padding: 3.5pt 5pt;
+    border: 0.5pt solid #999;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+    white-space: nowrap;
+}
+td {
+    padding: 2.5pt 5pt;
+    border-bottom: 0.5pt solid #ddd;
+    vertical-align: top;
+}
+.num  { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bold { font-weight: bold; }
+.kode { font-family: 'Courier New', monospace; font-size: 7.5pt; color: #666;
+        margin-right: 3pt; }
+.indent { padding-left: 1.4em !important; }
+
+.total-row td {
+    font-weight: bold;
+    border-top: 1pt solid #555;
+    border-bottom: 1pt solid #555;
+    background: #f4f4f4;
+}
+.grand-row td {
+    font-weight: bold;
+    border-top: 1.5pt solid #111;
+    border-bottom: 1pt solid #111;
+    background: #ebebeb;
+}
+
+{% block extra_css %}{% endblock %}
+</style>
+</head>
+<body>
+
+<div id="footer">Hal. <pdf:pagenumber> / <pdf:pagecount></div>
+
+<div class="kop">
+    <div class="kop-company">{{ nama_perusahaan }}</div>
+    <div class="kop-title">{{ judul }}</div>
+    <div class="kop-period">{{ periode_str }}</div>
+</div>
+
+{% block content %}{% endblock %}
+
+</body>
+</html>

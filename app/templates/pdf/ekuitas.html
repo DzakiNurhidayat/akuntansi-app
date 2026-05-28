@@ -1,0 +1,60 @@
+{% extends "_base.html" %}
+{% set BULAN = ['','Januari','Februari','Maret','April','Mei','Juni',
+                'Juli','Agustus','September','Oktober','November','Desember'] %}
+{% block extra_css %}
+.fin td   { border: none; padding: 2pt 5pt; font-size: 9pt; }
+.lbl-add  { padding-left: 1em !important; font-style: italic; color: #1a6b1a; }
+.lbl-less { padding-left: 1em !important; font-style: italic; color: #8b1a1a; }
+.lbl-sub  { padding-left: 3em !important; }
+.c2, .c3  { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.top-border { border-top: 0.5pt solid #111 !important; }
+.double-ul  { border-top: 0.5pt solid #111 !important;
+              border-bottom: 2pt double #111 !important;
+              padding-bottom: 2pt !important; }
+.net td   { font-weight: bold; }
+{% endblock %}
+{% block content %}
+<table class="fin" style="width:60%; margin:0 auto;">
+    <colgroup>
+        <col style="width:55%"><col style="width:27%"><col style="width:18%">
+    </colgroup>
+    <tbody>
+        <tr>
+            <td>{{ ek.nama_modal }}, {{ ek.tgl_awal.day }} {{ BULAN[ek.tgl_awal.month] }} {{ ek.tgl_awal.year }}</td>
+            <td></td>
+            <td class="c3">{{ ek.modal_awal | rupiah }}</td>
+        </tr>
+
+        {% for label, amt in ek.add_items %}
+        <tr>
+            <td class="{{ 'lbl-add' if loop.first else 'lbl-sub' }}">
+                {% if loop.first %}Add:&nbsp;&nbsp;{% endif %}{{ label }}
+            </td>
+            <td class="c2">{{ amt | rupiah }}</td>
+            <td></td>
+        </tr>
+        {% endfor %}
+
+        {% for label, amt in ek.less_items %}
+        <tr>
+            <td class="{{ 'lbl-less' if loop.first else 'lbl-sub' }}">
+                {% if loop.first %}Less: {% endif %}{{ label }}
+            </td>
+            <td class="c2">{{ amt | rupiah }}</td>
+            <td></td>
+        </tr>
+        {% endfor %}
+
+        <tr>
+            <td></td>
+            <td></td>
+            <td class="c3 top-border">{{ ek.perubahan | rupiah }}</td>
+        </tr>
+        <tr class="net">
+            <td>{{ ek.nama_modal }}, {{ ek.tgl_akhir.day }} {{ BULAN[ek.tgl_akhir.month] }} {{ ek.tgl_akhir.year }}</td>
+            <td></td>
+            <td class="c3 double-ul">{{ ek.modal_akhir | rupiah }}</td>
+        </tr>
+    </tbody>
+</table>
+{% endblock %}

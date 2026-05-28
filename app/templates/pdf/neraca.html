@@ -1,0 +1,72 @@
+{% extends "_base.html" %}
+{% block extra_css %}
+.fin td   { border: none; padding: 2pt 5pt; font-size: 9pt; vertical-align: top; }
+.divider  { border-left: 1pt solid #aaa !important; }
+.sec-lbl  { font-weight: bold; padding-top: 5pt !important; }
+.item-lbl { padding-left: 1.2em !important; }
+.kt-lbl   { padding-left: 1.2em !important; color: #666; }
+.kt-amt   { color: #666; text-align: right; font-variant-numeric: tabular-nums; }
+.sub-amt  { text-align: right; font-weight: bold; font-variant-numeric: tabular-nums;
+            border-top: 0.5pt solid #666 !important; }
+.tot-lbl  { font-weight: bold; padding-top: 5pt !important; }
+.tot-amt  { text-align: right; font-weight: bold; font-variant-numeric: tabular-nums;
+            border-top: 0.5pt solid #111 !important;
+            border-bottom: 2pt double #111 !important;
+            padding-top: 4pt !important; padding-bottom: 2pt !important; }
+.amt-r    { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+{% endblock %}
+{% block content %}
+<table class="fin">
+    <colgroup>
+        <col style="width:32%"><col style="width:18%">
+        <col style="width:32%"><col style="width:18%">
+    </colgroup>
+    <thead>
+        <tr>
+            <th colspan="2" style="text-align:center; border-right:1pt solid #aaa;">ASET</th>
+            <th colspan="2" style="text-align:center;">KEWAJIBAN &amp; MODAL</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for (l_lbl, l_amt, l_type), (r_lbl, r_amt, r_type) in nr.rows %}
+        <tr>
+            <td class="
+                {%- if l_type == 'section' %} sec-lbl
+                {%- elif l_type == 'item' %} item-lbl
+                {%- elif l_type == 'item-kontra' %} kt-lbl
+                {%- elif l_type == 'total' %} tot-lbl
+                {%- endif %}">{{ l_lbl }}</td>
+            <td class="amt-r
+                {%- if l_type == 'item-kontra' %} kt-amt
+                {%- elif l_type == 'subtotal' %} sub-amt
+                {%- elif l_type == 'total' %} tot-amt
+                {%- endif %}">
+                {% if l_amt is not none %}
+                    {% if l_type == 'item-kontra' %}({{ l_amt | angka }})
+                    {% else %}{{ l_amt | rupiah }}{% endif %}
+                {% endif %}
+            </td>
+            <td class="divider
+                {%- if r_type == 'section' %} sec-lbl
+                {%- elif r_type == 'item' %} item-lbl
+                {%- elif r_type == 'item-kontra' %} kt-lbl
+                {%- elif r_type == 'total' %} tot-lbl
+                {%- endif %}">{{ r_lbl }}</td>
+            <td class="amt-r
+                {%- if r_type == 'item-kontra' %} kt-amt
+                {%- elif r_type == 'subtotal' %} sub-amt
+                {%- elif r_type == 'total' %} tot-amt
+                {%- endif %}">
+                {% if r_amt is not none %}
+                    {% if r_type == 'item-kontra' %}({{ r_amt | angka }})
+                    {% else %}{{ r_amt | rupiah }}{% endif %}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if not nr.seimbang %}
+<p style="color:#c00;font-weight:bold;margin-top:6pt;">⚠ Neraca tidak seimbang!</p>
+{% endif %}
+{% endblock %}

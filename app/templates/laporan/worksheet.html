@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Kertas Kerja - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Kertas Kerja</h1>
+        <p class="text-muted">
+            {{ tgl_dari.strftime('%d %b %Y') }} — {{ tgl_sampai.strftime('%d %b %Y') }}
+        </p>
+    </div>
+    <a href="/laporan/worksheet?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
+       class="btn btn-secondary" target="_blank">
+        ↓ Download PDF
+    </a>
+</div>
+
+{% set base_url = "/laporan/worksheet" %}
+{% include "laporan/_filter_bar.html" %}
+
+<div class="card table-card">
+    <div class="table-wrapper">
+        <table class="table ws-table">
+            <thead>
+                {# Baris 1: nama seksi #}
+                <tr class="ws-group-header">
+                    <th rowspan="2" class="ws-th-ket">Keterangan</th>
+                    <th colspan="2" class="ws-head ws-bl">Neraca Saldo</th>
+                    <th colspan="2" class="ws-head ws-bl">AJP</th>
+                    <th colspan="2" class="ws-head ws-bl">NSD</th>
+                    <th colspan="2" class="ws-head ws-bl">Laba Rugi</th>
+                    <th colspan="2" class="ws-head ws-bl">Neraca</th>
+                </tr>
+                {# Baris 2: Debet / Kredit #}
+                <tr>
+                    <th class="ws-sub ws-num-col ws-bl">Debet</th>
+                    <th class="ws-sub ws-num-col">Kredit</th>
+                    <th class="ws-sub ws-num-col ws-bl">Debet</th>
+                    <th class="ws-sub ws-num-col">Kredit</th>
+                    <th class="ws-sub ws-num-col ws-bl">Debet</th>
+                    <th class="ws-sub ws-num-col">Kredit</th>
+                    <th class="ws-sub ws-num-col ws-bl">Debet</th>
+                    <th class="ws-sub ws-num-col">Kredit</th>
+                    <th class="ws-sub ws-num-col ws-bl">Debet</th>
+                    <th class="ws-sub ws-num-col">Kredit</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="ws-keterangan">
+                        <span class="ws-kode">{{ row.kode_akun }}</span>{{ row.nama_akun }}
+                    </td>
+                    <td class="ws-num ws-num-col ws-bl">{% if row.ns_d  %}{{ row.ns_d  | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col">{% if row.ns_k  %}{{ row.ns_k  | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col ws-bl">{% if row.ajp_d %}{{ row.ajp_d | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col">{% if row.ajp_k %}{{ row.ajp_k | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col ws-bl">{% if row.nsd_d %}{{ row.nsd_d | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col">{% if row.nsd_k %}{{ row.nsd_k | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col ws-bl">{% if row.lr_d  %}{{ row.lr_d  | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col">{% if row.lr_k  %}{{ row.lr_k  | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col ws-bl">{% if row.n_d   %}{{ row.n_d   | angka }}{% endif %}</td>
+                    <td class="ws-num ws-num-col">{% if row.n_k   %}{{ row.n_k   | angka }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+            <tfoot>
+                {# Total #}
+                <tr class="ws-total-row">
+                    <td class="ws-keterangan">Total</td>
+                    <td class="ws-num ws-num-col ws-bl">{{ totals.ns_d  | rupiah }}</td>
+                    <td class="ws-num ws-num-col">{{ totals.ns_k  | rupiah }}</td>
+                    <td class="ws-num ws-num-col ws-bl">{{ totals.ajp_d | rupiah }}</td>
+                    <td class="ws-num ws-num-col">{{ totals.ajp_k | rupiah }}</td>
+                    <td class="ws-num ws-num-col ws-bl">{{ totals.nsd_d | rupiah }}</td>
+                    <td class="ws-num ws-num-col">{{ totals.nsd_k | rupiah }}</td>
+                    <td class="ws-num ws-num-col ws-bl">{{ totals.lr_d  | rupiah }}</td>
+                    <td class="ws-num ws-num-col">{{ totals.lr_k  | rupiah }}</td>
+                    <td class="ws-num ws-num-col ws-bl">{{ totals.n_d   | rupiah }}</td>
+                    <td class="ws-num ws-num-col">{{ totals.n_k   | rupiah }}</td>
+                </tr>
+
+                {# Selisih — keterangan kosong #}
+                {% if selisih.label %}
+                <tr class="ws-selisih-row">
+                    <td class="ws-keterangan"></td>
+                    <td class="ws-num ws-num-col ws-bl"></td>
+                    <td class="ws-num ws-num-col"></td>
+                    <td class="ws-num ws-num-col ws-bl"></td>
+                    <td class="ws-num ws-num-col"></td>
+                    <td class="ws-num ws-num-col ws-bl"></td>
+                    <td class="ws-num ws-num-col"></td>
+                    <td class="ws-num ws-num-col ws-bl">{% if selisih.lr_d %}{{ selisih.lr_d | rupiah }}{% endif %}</td>
+                    <td class="ws-num ws-num-col">{% if selisih.lr_k %}{{ selisih.lr_k | rupiah }}{% endif %}</td>
+                    <td class="ws-num ws-num-col ws-bl">{% if selisih.n_d %}{{ selisih.n_d | rupiah }}{% endif %}</td>
+                    <td class="ws-num ws-num-col">{% if selisih.n_k %}{{ selisih.n_k | rupiah }}{% endif %}</td>
+                </tr>
+                {% endif %}
+
+                {# Grand Total #}
+                <tr class="ws-grand-row">
+                    <td class="ws-keterangan">Grand Total</td>
+                    <td class="ws-num ws-num-col ws-bl"></td>
+                    <td class="ws-num ws-num-col"></td>
+                    <td class="ws-num ws-num-col ws-bl"></td>
+                    <td class="ws-num ws-num-col"></td>
+                    <td class="ws-num ws-num-col ws-bl"></td>
+                    <td class="ws-num ws-num-col"></td>
+                    <td class="ws-num ws-num-col ws-bl">{{ grand.lr_d | rupiah }}</td>
+                    <td class="ws-num ws-num-col">{{ grand.lr_k | rupiah }}</td>
+                    <td class="ws-num ws-num-col ws-bl">{{ grand.n_d | rupiah }}</td>
+                    <td class="ws-num ws-num-col">{{ grand.n_k | rupiah }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endblock %}

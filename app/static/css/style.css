@@ -408,6 +408,306 @@ input[type="number"] { -moz-appearance: textfield; }
 .color-debet  { color: #1a5276; }
 .color-kredit { color: #784212; }
 
+/* ── Worksheet (Kertas Kerja) ── */
+.ws-table {
+    font-size: .82rem;
+    min-width: 1400px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.ws-table th { padding: .85rem 1.1rem !important; background: #f8f9fa !important; color: #2c3e50 !important; }
+.ws-table td { padding: .95rem 1.1rem !important; border-bottom: 1px solid #dfe6e9; color: #2c3e50; }
+
+/* Semua kolom angka: garis kiri tipis konsisten */
+.ws-table th.ws-num-col,
+.ws-table td.ws-num-col { border-left: 1px solid #bdc3c7 !important; }
+
+/* Batas antar seksi: warna sedikit lebih gelap, ketebalan tetap sama */
+.ws-table .ws-bl { border-left: 1px solid #7f8c8d !important; }
+
+/* Header baris 1 — warna background per seksi */
+.ws-table .ws-group-header th:nth-child(2) { background: #ebf5fb !important; } /* Neraca Saldo */
+.ws-table .ws-group-header th:nth-child(3) { background: #fef9e7 !important; } /* AJP */
+.ws-table .ws-group-header th:nth-child(4) { background: #eafaf1 !important; } /* NSD */
+.ws-table .ws-group-header th:nth-child(5) { background: #fef5e7 !important; } /* Laba Rugi */
+.ws-table .ws-group-header th:nth-child(6) { background: #f5eef8 !important; } /* Neraca */
+
+/* Header baris 2 (sub: Debet/Kredit) — 10 th, keterangan pakai rowspan */
+.ws-table thead tr:last-child th:nth-child(1),
+.ws-table thead tr:last-child th:nth-child(2) { background: #ebf5fb !important; }
+.ws-table thead tr:last-child th:nth-child(3),
+.ws-table thead tr:last-child th:nth-child(4) { background: #fef9e7 !important; }
+.ws-table thead tr:last-child th:nth-child(5),
+.ws-table thead tr:last-child th:nth-child(6) { background: #eafaf1 !important; }
+.ws-table thead tr:last-child th:nth-child(7),
+.ws-table thead tr:last-child th:nth-child(8) { background: #fef5e7 !important; }
+.ws-table thead tr:last-child th:nth-child(9),
+.ws-table thead tr:last-child th:nth-child(10) { background: #f5eef8 !important; }
+
+/* Header rows */
+.ws-table .ws-group-header th { text-align: center; }
+.ws-table .ws-th-ket { vertical-align: middle; width: 230px; }
+.ws-table .ws-head {
+    text-align: center;
+    font-size: .73rem;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    border-bottom: none !important;
+    padding-bottom: .3rem !important;
+}
+.ws-table .ws-sub {
+    text-align: center;
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* Sel data */
+.ws-table .ws-keterangan { white-space: nowrap; }
+.ws-table .ws-kode {
+    font-family: 'Courier New', monospace;
+    font-size: .75rem;
+    color: #95a5a6;
+    margin-right: .5rem;
+}
+.ws-table .ws-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Baris footer */
+.ws-total-row td   { border-top: 1px solid #7f8c8d !important; border-bottom: 1px solid #7f8c8d !important; font-weight: 700 !important; background: #f2f3f4 !important; }
+.ws-selisih-row td { border-top: 1px solid #dfe6e9 !important; border-bottom: none !important; }
+.ws-grand-row td   { border-top: 1px solid #7f8c8d !important; border-bottom: 1px solid #7f8c8d !important; font-weight: 700 !important; background: #f2f3f4 !important; }
+
+/* ── Akun search dropdown ── */
+.akun-search-wrap {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+.akun-search-input { width: 100%; }
+/* Border biru saat ada akun terpilih */
+.akun-search-wrap.has-value .akun-search-input {
+    border-color: #2980b9;
+    background: #f0f7ff;
+}
+
+.akun-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #2980b9;
+    border-top: none;
+    border-radius: 0 0 5px 5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 200;
+    max-height: 260px;
+    overflow-y: auto;
+}
+.akun-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    border-bottom: 1px solid #f2f3f4;
+}
+.akun-option:last-child { border-bottom: none; }
+.akun-option:hover,
+.akun-option.active { background: #eaf4fb; }
+.akun-opt-kode {
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: #7f8c8d;
+    min-width: 2.8rem;
+}
+.akun-opt-nama { flex: 1; }
+.akun-opt-jenis { font-size: 0.7rem; }
+
+/* ── Dashboard grid ── */
+.dash-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+@media (max-width: 700px) {
+    .dash-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+    .dash-grid { grid-template-columns: 1fr; }
+}
+.dash-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-left: 4px solid transparent;
+}
+.dash-label {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: .4rem;
+}
+.dash-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.dash-aset       { border-color: #2980b9; }
+.dash-aset       .dash-label { color: #1a5276; }
+.dash-aset       .dash-value { color: #2980b9; }
+.dash-liabilitas { border-color: #e67e22; }
+.dash-liabilitas .dash-label { color: #784212; }
+.dash-liabilitas .dash-value { color: #e67e22; }
+.dash-modal      { border-color: #27ae60; }
+.dash-modal      .dash-label { color: #1e8449; }
+.dash-modal      .dash-value { color: #27ae60; }
+.dash-pendapatan { border-color: #16a085; }
+.dash-pendapatan .dash-label { color: #0e6655; }
+.dash-pendapatan .dash-value { color: #16a085; }
+.dash-beban      { border-color: #c0392b; }
+.dash-beban      .dash-label { color: #7b241c; }
+.dash-beban      .dash-value { color: #c0392b; }
+.dash-laba       { border-color: #8e44ad; }
+.dash-laba       .dash-label { color: #6c3483; }
+.dash-laba       .dash-value { color: #8e44ad; }
+.dash-rugi       { border-color: #e74c3c; }
+.dash-rugi       .dash-label { color: #922b21; }
+.dash-rugi       .dash-value { color: #e74c3c; }
+
+/* ── Persamaan chips (daftar transaksi) ── */
+.persamaan-chip {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+.chip-plus  { background: #d5f5e3; color: #1e8449; }
+.chip-minus { background: #fadbd8; color: #7b241c; }
+
+/* ── Laporan Keuangan ── */
+
+/* Tab bar */
+.fin-tab-bar {
+    display: flex;
+    padding: 0;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+.fin-tab {
+    flex: 1;
+    text-align: center;
+    padding: .85rem 1rem;
+    text-decoration: none;
+    color: #7f8c8d;
+    font-size: .875rem;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: color .15s, border-color .15s, background .15s;
+}
+.fin-tab:hover { color: #2c3e50; background: #f8f9fa; }
+.fin-tab.active {
+    color: #2980b9;
+    border-bottom-color: #2980b9;
+    background: #f0f7ff;
+}
+
+/* Report cards */
+.fin-card       { max-width: 680px; margin: 0 auto; }
+.fin-card-wide  { max-width: 960px; margin: 0 auto; }
+
+/* Report header (company, title, period) */
+.fin-report-header {
+    text-align: center;
+    margin-bottom: 1.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #ecf0f1;
+}
+.fin-rh-company { font-size: 1.05rem; font-weight: 700; color: #2c3e50; margin-bottom: .15rem; }
+.fin-rh-title   { font-size: .95rem;  font-weight: 600; color: #2c3e50; margin-bottom: .1rem; }
+.fin-rh-period  { font-size: .82rem;  color: #7f8c8d; }
+
+/* Base table */
+.fin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .9rem;
+}
+.fin-table td {
+    padding: .45rem .75rem;
+    color: #2c3e50;
+    vertical-align: top;
+    border: none;
+}
+
+/* Row types */
+.fin-section-header td { font-weight: 600; padding-top: .9rem; color: #555; }
+.fin-gap td            { height: .6rem; padding: 0 !important; }
+.fin-indent            { padding-left: 2.25rem !important; }
+.fin-num               { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fin-subtotal-lbl      { font-weight: 600; }
+.fin-net-lbl           { font-weight: 700; padding-top: .75rem !important; }
+
+/* Borders on amount cells */
+.fin-top-border    { border-top: 1px solid #2c3e50 !important; }
+.fin-double-ul {
+    border-top: 1px solid #2c3e50 !important;
+    border-bottom: 3px double #2c3e50 !important;
+    padding-bottom: .3rem !important;
+    padding-top:    .55rem !important;
+}
+
+/* Ekuitas — labels */
+.fin-lbl-add  { padding-left: 1rem   !important; font-style: italic; color: #1e8449; }
+.fin-lbl-less { padding-left: 1rem   !important; font-style: italic; color: #922b21; }
+.fin-lbl-sub  { padding-left: 4.25rem !important; }
+
+/* Neraca table */
+.fin-neraca-table { min-width: 680px; }
+.fin-nr-th {
+    background: #f8f9fa;
+    padding: .6rem 1rem;
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #7f8c8d;
+    border-bottom: 1px solid #dee2e6;
+    text-align: center;
+}
+.fin-nr-th-left  { border-right: 2px solid #dee2e6; }
+.fin-nr-divider  { border-left: 2px solid #dee2e6 !important; }
+
+/* Neraca row-type column styles */
+.fin-nr-lbl { padding: .4rem .75rem; color: #2c3e50; vertical-align: top; }
+.fin-nr-amt { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+              padding: .4rem .75rem; vertical-align: top; }
+
+.fin-nr-lbl-section   { font-weight: 600; padding-top: .8rem !important; }
+.fin-nr-amt-section   { padding-top: .8rem !important; }
+.fin-nr-lbl-item      { padding-left: 1.75rem !important; }
+.fin-nr-lbl-item-kontra { padding-left: 1.75rem !important; color: #7f8c8d; }
+.fin-nr-amt-item-kontra { color: #7f8c8d; }
+.fin-nr-lbl-subtotal  { font-weight: 600; }
+.fin-nr-amt-subtotal  { font-weight: 600; border-top: 1px solid #7f8c8d !important; }
+.fin-nr-lbl-spacer    { padding: 0 !important; height: .55rem; }
+.fin-nr-amt-spacer    { padding: 0 !important; height: .55rem; }
+.fin-nr-lbl-total     { font-weight: 700; border-top: 1px solid #2c3e50 !important;
+                        padding-top: .65rem !important; }
+.fin-nr-amt-total     { font-weight: 700;
+                        border-top: 1px solid #2c3e50 !important;
+                        border-bottom: 3px double #2c3e50 !important;
+                        padding-top: .65rem !important;
+                        padding-bottom: .3rem !important; }
+
 /* ── Pagination ── */
 .pagination-bar {
     display: flex;

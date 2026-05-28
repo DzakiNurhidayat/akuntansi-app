@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Laporan Keuangan - Cleaning Service Accounting{% endblock %}
+
+{% block content %}
+{% set BULAN = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'] %}
+
+<div class="page-header">
+    <div>
+        <h1>Laporan Keuangan</h1>
+        <p class="text-muted">{{ periode.nama_perusahaan }}</p>
+    </div>
+    <a href="/laporan/keuangan?tab={{ tab }}&tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
+       class="btn btn-secondary" target="_blank">
+        ↓ Download PDF
+    </a>
+</div>
+
+{# ─── Tab navigation ─── #}
+<div class="fin-tab-bar card">
+    {% set _tabs = [("laba-rugi", "Laba Rugi"), ("ekuitas", "Ekuitas Pemilik"), ("neraca", "Neraca")] %}
+    {% for key, label in _tabs %}
+    <a href="/laporan/keuangan?tab={{ key }}&tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}"
+       class="fin-tab {{ 'active' if tab == key }}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+{% set base_url = "/laporan/keuangan" %}
+{% include "laporan/_filter_bar.html" %}
+
+
+{# ══════════════════════════════════════════════════════════
+   LAPORAN LABA RUGI
+══════════════════════════════════════════════════════════ #}
+{% if tab == "laba-rugi" %}
+<div class="card fin-card">
+    <div class="fin-report-header">
+        <p class="fin-rh-company">{{ periode.nama_perusahaan }}</p>
+        <p class="fin-rh-title">Laporan Laba Rugi</p>
+        <p class="fin-rh-period">
+            Untuk Bulan yang Berakhir
+            {{ tgl_sampai.day }} {{ BULAN[tgl_sampai.month] }} {{ tgl_sampai.year }}
+        </p>
+    </div>
+
+    <table class="fin-table">
+        <colgroup>
+            <col style="width:55%">
+            <col style="width:27%">
+            <col style="width:18%">
+        </colgroup>
+        <tbody>
+            {# ── Pendapatan ── #}
+            <tr class="fin-section-header">
+                <td>Pendapatan Diterima</td><td></td><td></td>
+            </tr>
+            {% for akun, bal in laba_rugi.pendapatan_items %}
+            <tr>
+                <td class="fin-indent">{{ akun.nama_akun }}</td>
+                <td class="fin-num">{{ bal | rupiah }}</td>
+                <td></td>
+            </tr>
+            {% endfor %}
+            <tr>
+                <td class="fin-subtotal-lbl">Total Pendapatan</td>
+                <td class="fin-num fin-top-border">{{ laba_rugi.total_pendapatan | rupiah }}</td>
+                <td></td>
+            </tr>
+
+            <tr class="fin-gap"><td colspan="3"></td></tr>
+
+            {# ── Beban ── #}
+            <tr class="fin-section-header">
+                <td>Beban Operasional</td><td></td><td></td>
+            </tr>
+            {% for akun, bal in laba_rugi.beban_items %}
+            <tr>
+                <td class="fin-indent">{{ akun.nama_akun }}</td>
+                <td class="fin-num">{{ bal | rupiah }}</td>
+                <td></td>
+            </tr>
+            {% endfor %}
+            <tr>
+                <td class="fin-subtotal-lbl">Total Beban</td>
+                <td class="fin-num fin-top-border">{{ laba_rugi.total_beban | rupiah }}</td>
+                <td></td>
+            </tr>
+
+            <tr class="fin-gap"><td colspan="3"></td></tr>
+
+            {# ── Net Income / Loss ── #}
+            <tr>
+                <td class="fin-net-lbl">{{ 'Net Income' if laba_rugi.is_laba else 'Net Loss' }}</td>
+                <td></td>
+                <td class="fin-num fin-double-ul">{{ laba_rugi.net | rupiah }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+
+{# ══════════════════════════════════════════════════════════
+   LAPORAN EKUITAS PEMILIK
+══════════════════════════════════════════════════════════ #}
+{% elif tab == "ekuitas" %}
+<div class="card fin-card">
+    <div class="fin-report-header">
+        <p class="fin-rh-company">{{ periode.nama_perusahaan }}</p>
+        <p class="fin-rh-title">Laporan Ekuitas Pemilik</p>
+        <p class="fin-rh-period">
+            Untuk Bulan yang Berakhir
+            {{ tgl_sampai.day }} {{ BULAN[tgl_sampai.month] }} {{ tgl_sampai.year }}
+        </p>
+    </div>
+
+    <table class="fin-table">
+        <colgroup>
+            <col style="width:55%">
+            <col style="width:27%">
+            <col style="width:18%">
+        </colgroup>
+        <tbody>
+            {# Modal Awal #}
+            <tr>
+                <td>{{ ekuitas.nama_modal }},
+                    {{ ekuitas.tgl_awal.day }} {{ BULAN[ekuitas.tgl_awal.month] }} {{ ekuitas.tgl_awal.year }}
+                </td>
+                <td></td>
+                <td class="fin-num">{{ ekuitas.modal_awal | rupiah }}</td>
+            </tr>
+
+            {# Add items #}
+            {% if ekuitas.add_items %}
+            {% for label, amt in ekuitas.add_items %}
+            <tr>
+                <td class="{{ 'fin-lbl-add' if loop.first else 'fin-lbl-sub' }}">
+                    {% if loop.first %}Add:&nbsp;&nbsp;{% endif %}{{ label }}
+                </td>
+                <td class="fin-num">{{ amt | rupiah }}</td>
+                <td></td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+
+            {# Less items #}
+            {% if ekuitas.less_items %}
+            {% for label, amt in ekuitas.less_items %}
+            <tr>
+                <td class="{{ 'fin-lbl-less' if loop.first else 'fin-lbl-sub' }}">
+                    {% if loop.first %}Less: {% endif %}{{ label }}
+                </td>
+                <td class="fin-num">{{ amt | rupiah }}</td>
+                <td></td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+
+            {# Baris kosong — jumlah perubahan di kolom 3 #}
+            <tr>
+                <td></td>
+                <td></td>
+                <td class="fin-num fin-top-border">{{ ekuitas.perubahan | rupiah }}</td>
+            </tr>
+
+            {# Modal Akhir #}
+            <tr>
+                <td class="fin-net-lbl">{{ ekuitas.nama_modal }},
+                    {{ ekuitas.tgl_akhir.day }} {{ BULAN[ekuitas.tgl_akhir.month] }} {{ ekuitas.tgl_akhir.year }}
+                </td>
+                <td></td>
+                <td class="fin-num fin-double-ul">{{ ekuitas.modal_akhir | rupiah }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+
+{# ══════════════════════════════════════════════════════════
+   NERACA
+══════════════════════════════════════════════════════════ #}
+{% elif tab == "neraca" %}
+<div class="card fin-card-wide">
+    <div class="fin-report-header">
+        <p class="fin-rh-company">{{ periode.nama_perusahaan }}</p>
+        <p class="fin-rh-title">Neraca</p>
+        <p class="fin-rh-period">
+            Per {{ tgl_sampai.day }} {{ BULAN[tgl_sampai.month] }} {{ tgl_sampai.year }}
+        </p>
+    </div>
+
+    <div class="table-wrapper">
+        <table class="fin-table fin-neraca-table">
+            <colgroup>
+                <col style="width:32%">
+                <col style="width:18%">
+                <col style="width:32%">
+                <col style="width:18%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th colspan="2" class="fin-nr-th fin-nr-th-left">ASET</th>
+                    <th colspan="2" class="fin-nr-th fin-nr-th-right">KEWAJIBAN &amp; MODAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for (l_lbl, l_amt, l_type), (r_lbl, r_amt, r_type) in neraca.rows %}
+                <tr>
+                    {# Kolom Aset - label #}
+                    <td class="fin-nr-lbl fin-nr-lbl-{{ l_type }}">{{ l_lbl }}</td>
+                    {# Kolom Aset - angka #}
+                    <td class="fin-nr-amt fin-nr-amt-{{ l_type }}">
+                        {% if l_amt is not none %}
+                            {% if l_type == "item-kontra" %}({{ l_amt | angka }})
+                            {% else %}{{ l_amt | rupiah }}{% endif %}
+                        {% endif %}
+                    </td>
+                    {# Kolom Kewajiban+Modal - label #}
+                    <td class="fin-nr-lbl fin-nr-lbl-{{ r_type }} fin-nr-divider">{{ r_lbl }}</td>
+                    {# Kolom Kewajiban+Modal - angka #}
+                    <td class="fin-nr-amt fin-nr-amt-{{ r_type }}">
+                        {% if r_amt is not none %}
+                            {% if r_type == "item-kontra" %}({{ r_amt | angka }})
+                            {% else %}{{ r_amt | rupiah }}{% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if not neraca.seimbang %}
+    <div class="alert alert-error" style="margin-top:1rem;">
+        ⚠ Neraca tidak seimbang — selisih:
+        {{ (neraca.total_aset - neraca.total_km) | abs | rupiah }}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

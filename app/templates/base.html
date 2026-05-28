@@ -4,17 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Cleaning Service Accounting{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=6">
 </head>
 <body>
     <nav class="navbar">
         <div class="container" style="display:flex; justify-content:space-between; align-items:center;">
             <a href="/" class="brand">Cleaning Service Accounting</a>
             <div class="nav-links">
-                <a href="/transaksi" class="{{ 'active' if request.url.path.startswith('/transaksi') }}">Input Transaksi</a>
+                <a href="/" class="{{ 'active' if request.url.path == '/' }}">Dashboard</a>
+                <a href="/transaksi" class="{{ 'active' if request.url.path.startswith('/transaksi') }}">Daftar Transaksi</a>
                 <a href="/laporan/jurnal-umum" class="{{ 'active' if request.url.path == '/laporan/jurnal-umum' }}">Jurnal Umum</a>
                 <a href="/laporan/buku-besar" class="{{ 'active' if request.url.path == '/laporan/buku-besar' }}">Buku Besar</a>
                 <a href="/laporan/neraca-saldo" class="{{ 'active' if request.url.path == '/laporan/neraca-saldo' }}">Neraca Saldo</a>
+                <a href="/laporan/worksheet" class="{{ 'active' if request.url.path == '/laporan/worksheet' }}">Kertas Kerja</a>
+                <a href="/laporan/keuangan" class="{{ 'active' if request.url.path == '/laporan/keuangan' }}">Laporan Keuangan</a>
                 <a href="/akun" class="{{ 'active' if request.url.path.startswith('/akun') }}">Daftar Akun</a>
             </div>
         </div>

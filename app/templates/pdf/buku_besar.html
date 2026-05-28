@@ -1,0 +1,43 @@
+{% extends "_base.html" %}
+{% block content %}
+{% for item in ledger %}
+<div style="margin-bottom:12pt; break-inside:avoid;">
+    <p style="font-weight:bold; font-size:9.5pt; margin-bottom:3pt;">
+        <span class="kode">{{ item.akun.kode_akun }}</span>{{ item.akun.nama_akun }}
+        <span style="font-size:8pt; color:#666; font-weight:normal;">
+            — {{ item.akun.jenis_akun }}, saldo normal: {{ item.akun.saldo_normal }}
+        </span>
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width:9%">Tanggal</th>
+                <th style="width:34%">Keterangan</th>
+                <th style="width:7%">Ref</th>
+                <th style="width:16%">Debet</th>
+                <th style="width:16%">Kredit</th>
+                <th style="width:18%">Saldo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in item.rows %}
+            <tr>
+                <td>{{ r.tanggal.strftime('%d/%m/%y') }}</td>
+                <td>{{ r.keterangan }}</td>
+                <td style="text-align:center;font-size:7.5pt;color:#666;">{{ r.ref }}</td>
+                <td class="num">{% if r.debet > 0 %}{{ r.debet | rupiah }}{% endif %}</td>
+                <td class="num">{% if r.kredit > 0 %}{{ r.kredit | rupiah }}{% endif %}</td>
+                <td class="num">{{ r.saldo | rupiah }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="5" class="bold">Saldo Akhir</td>
+                <td class="num">{{ item.saldo_akhir | rupiah }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endfor %}
+{% endblock %}

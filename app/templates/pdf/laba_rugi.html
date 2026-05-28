@@ -1,0 +1,58 @@
+{% extends "_base.html" %}
+{% block extra_css %}
+.fin td  { border: none; padding: 2pt 5pt; font-size: 9pt; }
+.sec td  { font-weight: bold; padding-top: 7pt; }
+.item td { padding-left: 1.8em; }
+.sub td  { font-weight: bold; }
+.sub .c2 { border-top: 0.5pt solid #111; }
+.net td  { font-weight: bold; padding-top: 8pt; }
+.net .c3 { border-top: 0.5pt solid #111; border-bottom: 2pt double #111;
+           padding-bottom: 2pt; }
+.c2, .c3 { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+{% endblock %}
+{% block content %}
+<table class="fin" style="width:60%; margin:0 auto;">
+    <colgroup>
+        <col style="width:55%"><col style="width:27%"><col style="width:18%">
+    </colgroup>
+    <tbody>
+        <tr class="sec"><td>Pendapatan Diterima</td><td></td><td></td></tr>
+        {% for akun, bal in lr.pendapatan_items %}
+        <tr class="item">
+            <td>{{ akun.nama_akun }}</td>
+            <td class="c2">{{ bal | rupiah }}</td>
+            <td></td>
+        </tr>
+        {% endfor %}
+        <tr class="sub">
+            <td>Total Pendapatan</td>
+            <td class="c2">{{ lr.total_pendapatan | rupiah }}</td>
+            <td></td>
+        </tr>
+
+        <tr><td colspan="3" style="padding:4pt 0;border:none;"></td></tr>
+
+        <tr class="sec"><td>Beban Operasional</td><td></td><td></td></tr>
+        {% for akun, bal in lr.beban_items %}
+        <tr class="item">
+            <td>{{ akun.nama_akun }}</td>
+            <td class="c2">{{ bal | rupiah }}</td>
+            <td></td>
+        </tr>
+        {% endfor %}
+        <tr class="sub">
+            <td>Total Beban</td>
+            <td class="c2">{{ lr.total_beban | rupiah }}</td>
+            <td></td>
+        </tr>
+
+        <tr><td colspan="3" style="padding:4pt 0;border:none;"></td></tr>
+
+        <tr class="net">
+            <td>{{ 'Net Income' if lr.is_laba else 'Net Loss' }}</td>
+            <td></td>
+            <td class="c3">{{ lr.net | rupiah }}</td>
+        </tr>
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "_base.html" %}
+{% block extra_css %}
+table { font-size: 7.5pt; }
+th    { font-size: 6.5pt; padding: 3pt 3pt; }
+td    { padding: 2pt 3pt; font-size: 7.5pt; }
+.ws-bl { border-left: 0.8pt solid #777 !important; }
+{% endblock %}
+{% block content %}
+<table>
+    <thead>
+        <tr>
+            <th rowspan="2" style="width:20%; text-align:left; vertical-align:middle;">Keterangan</th>
+            <th colspan="2" style="width:16%">Neraca Saldo</th>
+            <th colspan="2" style="width:16%">AJP</th>
+            <th colspan="2" style="width:16%">NSD</th>
+            <th colspan="2" style="width:16%">Laba Rugi</th>
+            <th colspan="2" style="width:16%">Neraca</th>
+        </tr>
+        <tr>
+            {% for _ in range(5) %}
+            <th class="num ws-bl">Debet</th>
+            <th class="num">Kredit</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td><span class="kode">{{ row.kode_akun }}</span>{{ row.nama_akun }}</td>
+            <td class="num ws-bl">{% if row.ns_d  %}{{ row.ns_d  | angka }}{% endif %}</td>
+            <td class="num">{% if row.ns_k  %}{{ row.ns_k  | angka }}{% endif %}</td>
+            <td class="num ws-bl">{% if row.ajp_d %}{{ row.ajp_d | angka }}{% endif %}</td>
+            <td class="num">{% if row.ajp_k %}{{ row.ajp_k | angka }}{% endif %}</td>
+            <td class="num ws-bl">{% if row.nsd_d %}{{ row.nsd_d | angka }}{% endif %}</td>
+            <td class="num">{% if row.nsd_k %}{{ row.nsd_k | angka }}{% endif %}</td>
+            <td class="num ws-bl">{% if row.lr_d  %}{{ row.lr_d  | angka }}{% endif %}</td>
+            <td class="num">{% if row.lr_k  %}{{ row.lr_k  | angka }}{% endif %}</td>
+            <td class="num ws-bl">{% if row.n_d   %}{{ row.n_d   | angka }}{% endif %}</td>
+            <td class="num">{% if row.n_k   %}{{ row.n_k   | angka }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="total-row">
+            <td class="bold">Total</td>
+            <td class="num ws-bl">{{ totals.ns_d  | rupiah }}</td>
+            <td class="num">{{ totals.ns_k  | rupiah }}</td>
+            <td class="num ws-bl">{{ totals.ajp_d | rupiah }}</td>
+            <td class="num">{{ totals.ajp_k | rupiah }}</td>
+            <td class="num ws-bl">{{ totals.nsd_d | rupiah }}</td>
+            <td class="num">{{ totals.nsd_k | rupiah }}</td>
+            <td class="num ws-bl">{{ totals.lr_d  | rupiah }}</td>
+            <td class="num">{{ totals.lr_k  | rupiah }}</td>
+            <td class="num ws-bl">{{ totals.n_d   | rupiah }}</td>
+            <td class="num">{{ totals.n_k   | rupiah }}</td>
+        </tr>
+        {% if selisih.label %}
+        <tr>
+            <td class="bold">{{ selisih.label }}</td>
+            <td class="num ws-bl"></td><td class="num"></td>
+            <td class="num ws-bl"></td><td class="num"></td>
+            <td class="num ws-bl"></td><td class="num"></td>
+            <td class="num ws-bl">{% if selisih.lr_d %}{{ selisih.lr_d | rupiah }}{% endif %}</td>
+            <td class="num">{% if selisih.lr_k %}{{ selisih.lr_k | rupiah }}{% endif %}</td>
+            <td class="num ws-bl">{% if selisih.n_d %}{{ selisih.n_d | rupiah }}{% endif %}</td>
+            <td class="num">{% if selisih.n_k %}{{ selisih.n_k | rupiah }}{% endif %}</td>
+        </tr>
+        {% endif %}
+        <tr class="grand-row">
+            <td class="bold">Grand Total</td>
+            <td class="num ws-bl"></td><td class="num"></td>
+            <td class="num ws-bl"></td><td class="num"></td>
+            <td class="num ws-bl"></td><td class="num"></td>
+            <td class="num ws-bl">{{ grand.lr_d | rupiah }}</td>
+            <td class="num">{{ grand.lr_k | rupiah }}</td>
+            <td class="num ws-bl">{{ grand.n_d | rupiah }}</td>
+            <td class="num">{{ grand.n_k | rupiah }}</td>
+        </tr>
+    </tfoot>
+</table>
+{% endblock %}

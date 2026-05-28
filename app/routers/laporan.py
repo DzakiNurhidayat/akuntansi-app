@@ -2,7 +2,7 @@ import calendar
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -14,6 +14,21 @@ router = APIRouter(prefix="/laporan", tags=["laporan"])
 
 JENIS_LAPORAN = ["umum"]
 PAGE_SIZE = 10  # transaksi per halaman Jurnal Umum
+
+_BULAN_ID = [
+    '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+]
+
+def _fmt_tgl(d) -> str:
+    return f"{d.day} {_BULAN_ID[d.month]} {d.year}"
+
+def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -114,6 +129,7 @@ def _build_ju_page_map(db: Session) -> dict:
 @router.get("/jurnal-umum")
 def jurnal_umum(request: Request, db: Session = Depends(get_db)):
     tgl_dari, tgl_sampai, presets = _parse_filter(request, db)
+    fmt  = request.query_params.get("format", "")
     page = max(1, int(request.query_params.get("page", 1) or 1))
 
     # Semua transaksi dalam filter (untuk total keseluruhan)
@@ -159,6 +175,37 @@ def jurnal_umum(request: Request, db: Session = Depends(get_db)):
     page_debet  = sum(float(r["entry"].debet)  for r in rows)
     page_kredit = sum(float(r["entry"].kredit) for r in rows)
 
+    # ── PDF export ────────────────────────────────────────────────────────────
+    if fmt == "pdf":
+        from app.services.pdf import render_pdf
+        periode_obj = (
+            db.query(Periode)
+            .order_by(Periode.tahun.desc(), Periode.bulan.desc())
+            .first()
+        )
+        pdf_rows = []
+        for t in all_transaksi:
+            entries = list(t.entries)
+            for i, e in enumerate(entries):
+                pdf_rows.append({
+                    "tanggal":    t.tanggal.strftime("%d/%m") if i == 0 else "",
+                    "keterangan": (t.keterangan or "") if i == 0 else "",
+                    "kode":       e.akun.kode_akun,
+                    "akun":       e.akun.nama_akun,
+                    "is_kredit":  e.kredit > 0,
+                    "debet":      float(e.debet),
+                    "kredit":     float(e.kredit),
+                })
+        pdf_bytes = render_pdf("jurnal_umum.html", {
+            "landscape":       False,
+            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
+            "judul":           "Jurnal Umum",
+            "periode_str":     f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}",
+            "rows":            pdf_rows,
+            "grand_total":     grand_total,
+        })
+        return _pdf_response(pdf_bytes, f"jurnal_umum_{tgl_dari}_{tgl_sampai}.pdf")
+
     return templates.TemplateResponse("laporan/jurnal_umum.html", {
         "request": request,
         "rows": rows,
@@ -178,6 +225,7 @@ def jurnal_umum(request: Request, db: Session = Depends(get_db)):
 @router.get("/buku-besar")
 def buku_besar(request: Request, db: Session = Depends(get_db)):
     tgl_dari, tgl_sampai, presets = _parse_filter(request, db)
+    fmt = request.query_params.get("format", "")
 
     # Peta entry → halaman JU (global, tanpa filter tanggal)
     ju_page_map = _build_ju_page_map(db)
@@ -224,6 +272,22 @@ def buku_besar(request: Request, db: Session = Depends(get_db)):
             "rows": rows,
         })
 
+    if fmt == "pdf":
+        from app.services.pdf import render_pdf
+        periode_obj = (
+            db.query(Periode)
+            .order_by(Periode.tahun.desc(), Periode.bulan.desc())
+            .first()
+        )
+        pdf_bytes = render_pdf("buku_besar.html", {
+            "landscape":       False,
+            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
+            "judul":           "Buku Besar",
+            "periode_str":     f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}",
+            "ledger":          ledger,
+        })
+        return _pdf_response(pdf_bytes, f"buku_besar_{tgl_dari}_{tgl_sampai}.pdf")
+
     return templates.TemplateResponse("laporan/buku_besar.html", {
         "request": request,
         "ledger": ledger,
@@ -236,6 +300,7 @@ def buku_besar(request: Request, db: Session = Depends(get_db)):
 @router.get("/neraca-saldo")
 def neraca_saldo(request: Request, db: Session = Depends(get_db)):
     tgl_dari, tgl_sampai, presets = _parse_filter(request, db)
+    fmt = request.query_params.get("format", "")
 
     akun_list = db.query(Akun).order_by(Akun.kode_akun).all()
 
@@ -278,6 +343,25 @@ def neraca_saldo(request: Request, db: Session = Depends(get_db)):
         sum_debet += Decimal(str(col_debet))
         sum_kredit += Decimal(str(col_kredit))
 
+    if fmt == "pdf":
+        from app.services.pdf import render_pdf
+        periode_obj = (
+            db.query(Periode)
+            .order_by(Periode.tahun.desc(), Periode.bulan.desc())
+            .first()
+        )
+        pdf_bytes = render_pdf("neraca_saldo.html", {
+            "landscape":       False,
+            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
+            "judul":           "Neraca Saldo",
+            "periode_str":     f"Per {_fmt_tgl(tgl_sampai)}",
+            "rows":            rows,
+            "sum_debet":       float(sum_debet),
+            "sum_kredit":      float(sum_kredit),
+            "seimbang":        sum_debet == sum_kredit,
+        })
+        return _pdf_response(pdf_bytes, f"neraca_saldo_{tgl_sampai}.pdf")
+
     return templates.TemplateResponse("laporan/neraca_saldo.html", {
         "request": request,
         "rows": rows,
@@ -285,6 +369,369 @@ def neraca_saldo(request: Request, db: Session = Depends(get_db)):
         "sum_kredit": float(sum_kredit),
         "seimbang": sum_debet == sum_kredit,
         **_filter_ctx(tgl_dari, tgl_sampai, presets, "/laporan/neraca-saldo"),
+    })
+
+
+# ─── Worksheet (Kertas Kerja / Neraca Lajur) ─────────────────────────────────
+
+@router.get("/worksheet")
+def worksheet(request: Request, db: Session = Depends(get_db)):
+    tgl_dari, tgl_sampai, presets = _parse_filter(request, db)
+    fmt = request.query_params.get("format", "")
+
+    akun_list = db.query(Akun).order_by(Akun.kode_akun).all()
+
+    def raw_sums(kode, jenis_list):
+        """Kembalikan (total_debet, total_kredit) mentah untuk akun & jenis tertentu."""
+        r = (
+            db.query(
+                func.coalesce(func.sum(JurnalEntry.debet), 0).label("d"),
+                func.coalesce(func.sum(JurnalEntry.kredit), 0).label("k"),
+            )
+            .join(Transaksi)
+            .filter(
+                JurnalEntry.kode_akun == kode,
+                Transaksi.tanggal >= tgl_dari,
+                Transaksi.tanggal <= tgl_sampai,
+                Transaksi.jenis.in_(jenis_list),
+            )
+            .first()
+        )
+        return Decimal(str(r.d)), Decimal(str(r.k))
+
+    def net_col(d_raw, k_raw, saldo_normal):
+        """Kembalikan (col_d, col_k) saldo bersih sesuai saldo normal akun."""
+        net = (d_raw - k_raw) if saldo_normal == "debet" else (k_raw - d_raw)
+        if net > 0:
+            return (float(net), 0.0) if saldo_normal == "debet" else (0.0, float(net))
+        elif net < 0:
+            return (0.0, float(-net)) if saldo_normal == "debet" else (float(-net), 0.0)
+        return 0.0, 0.0
+
+    rows = []
+    for akun in akun_list:
+        ns_d_raw,  ns_k_raw  = raw_sums(akun.kode_akun, ["umum"])
+        ajp_d_raw, ajp_k_raw = raw_sums(akun.kode_akun, ["penyesuaian"])
+
+        # Kolom NS — saldo bersih dari jurnal umum
+        ns_d, ns_k = net_col(ns_d_raw, ns_k_raw, akun.saldo_normal)
+
+        # Kolom AJP — jumlah mentah debet & kredit dari AJP
+        ajp_d, ajp_k = float(ajp_d_raw), float(ajp_k_raw)
+
+        # Kolom NSD — saldo bersih gabungan (NS + AJP)
+        nsd_d, nsd_k = net_col(
+            ns_d_raw + ajp_d_raw,
+            ns_k_raw + ajp_k_raw,
+            akun.saldo_normal,
+        )
+
+        # Laba Rugi vs Neraca — ambil dari NSD berdasarkan jenis akun
+        if akun.jenis_akun in ("pendapatan", "beban"):
+            lr_d, lr_k = nsd_d, nsd_k
+            n_d,  n_k  = 0.0,  0.0
+        else:
+            lr_d, lr_k = 0.0,  0.0
+            n_d,  n_k  = nsd_d, nsd_k
+
+        # Lewati akun yang kosong di seluruh kolom
+        if not any([ns_d, ns_k, ajp_d, ajp_k]):
+            continue
+
+        rows.append({
+            "kode_akun": akun.kode_akun,
+            "nama_akun": akun.nama_akun,
+            "ns_d": ns_d, "ns_k": ns_k,
+            "ajp_d": ajp_d, "ajp_k": ajp_k,
+            "nsd_d": nsd_d, "nsd_k": nsd_k,
+            "lr_d": lr_d, "lr_k": lr_k,
+            "n_d": n_d, "n_k": n_k,
+        })
+
+    # ── Total per kolom ───────────────────────────────────────────────────────
+    def tot(key):
+        return sum(r[key] for r in rows)
+
+    totals = {k: tot(k) for k in
+              ["ns_d","ns_k","ajp_d","ajp_k","nsd_d","nsd_k","lr_d","lr_k","n_d","n_k"]}
+
+    # ── Selisih Laba / Rugi ───────────────────────────────────────────────────
+    lr_diff = totals["lr_k"] - totals["lr_d"]  # positif = laba, negatif = rugi
+
+    if lr_diff > 0:       # Laba → masuk L/R Debet & Neraca Kredit
+        selisih = {"label": "Laba", "lr_d": float(lr_diff),  "lr_k": 0.0,
+                                    "n_d": 0.0,               "n_k": float(lr_diff)}
+    elif lr_diff < 0:     # Rugi → masuk L/R Kredit & Neraca Debet
+        rugi = float(-lr_diff)
+        selisih = {"label": "Rugi", "lr_d": 0.0,   "lr_k": rugi,
+                                    "n_d": rugi,    "n_k": 0.0}
+    else:
+        selisih = {"label": "", "lr_d": 0.0, "lr_k": 0.0, "n_d": 0.0, "n_k": 0.0}
+
+    # ── Grand total (setelah selisih, harus balance) ──────────────────────────
+    grand = {
+        "lr_d": totals["lr_d"] + selisih["lr_d"],
+        "lr_k": totals["lr_k"] + selisih["lr_k"],
+        "n_d":  totals["n_d"]  + selisih["n_d"],
+        "n_k":  totals["n_k"]  + selisih["n_k"],
+    }
+
+    if fmt == "pdf":
+        from app.services.pdf import render_pdf
+        periode_obj = (
+            db.query(Periode)
+            .order_by(Periode.tahun.desc(), Periode.bulan.desc())
+            .first()
+        )
+        pdf_bytes = render_pdf("worksheet.html", {
+            "landscape":       True,
+            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
+            "judul":           "Kertas Kerja (Neraca Lajur)",
+            "periode_str":     f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}",
+            "rows":            rows,
+            "totals":          totals,
+            "selisih":         selisih,
+            "grand":           grand,
+        })
+        return _pdf_response(pdf_bytes, f"worksheet_{tgl_dari}_{tgl_sampai}.pdf")
+
+    return templates.TemplateResponse("laporan/worksheet.html", {
+        "request": request,
+        "rows": rows,
+        "totals": totals,
+        "selisih": selisih,
+        "grand": grand,
+        **_filter_ctx(tgl_dari, tgl_sampai, presets, "/laporan/worksheet"),
+    })
+
+
+# ─── Laporan Keuangan ────────────────────────────────────────────────────────
+
+@router.get("/keuangan")
+def keuangan(request: Request, db: Session = Depends(get_db)):
+    tgl_dari, tgl_sampai, presets = _parse_filter(request, db)
+    tab = request.query_params.get("tab", "laba-rugi")
+
+    periode = (
+        db.query(Periode)
+        .order_by(Periode.tahun.desc(), Periode.bulan.desc())
+        .first()
+    )
+
+    akun_list = db.query(Akun).order_by(Akun.kode_akun).all()
+    JENIS_ALL = ["umum", "penyesuaian"]
+
+    def nsd_bal(kode, saldo_normal):
+        """Saldo NSD (umum+penyesuaian), selalu >= 0 dari sisi saldo normal."""
+        r = (
+            db.query(
+                func.coalesce(func.sum(JurnalEntry.debet), 0).label("d"),
+                func.coalesce(func.sum(JurnalEntry.kredit), 0).label("k"),
+            )
+            .join(Transaksi)
+            .filter(
+                JurnalEntry.kode_akun == kode,
+                Transaksi.tanggal >= tgl_dari,
+                Transaksi.tanggal <= tgl_sampai,
+                Transaksi.jenis.in_(JENIS_ALL),
+            )
+            .first()
+        )
+        d, k = Decimal(str(r.d)), Decimal(str(r.k))
+        net = (d - k) if saldo_normal == "debet" else (k - d)
+        return float(net) if net > 0 else 0.0
+
+    balances: dict[str, tuple] = {}
+    for a in akun_list:
+        balances[a.kode_akun] = (a, nsd_bal(a.kode_akun, a.saldo_normal))
+
+    # ── Laba Rugi ─────────────────────────────────────────────────────────────
+    pendapatan_items = [
+        (a, b) for _, (a, b) in balances.items()
+        if a.jenis_akun == "pendapatan" and b > 0
+    ]
+    beban_items = [
+        (a, b) for _, (a, b) in balances.items()
+        if a.jenis_akun == "beban" and b > 0
+    ]
+    total_pendapatan = sum(b for _, b in pendapatan_items)
+    total_beban      = sum(b for _, b in beban_items)
+    net_lr = total_pendapatan - total_beban  # positif = laba, negatif = rugi
+
+    laba_rugi = {
+        "pendapatan_items": pendapatan_items,
+        "beban_items":      beban_items,
+        "total_pendapatan": total_pendapatan,
+        "total_beban":      total_beban,
+        "net":     abs(net_lr),
+        "is_laba": net_lr >= 0,
+    }
+
+    # ── Ekuitas Pemilik ───────────────────────────────────────────────────────
+    modal_awal = 0.0  # TODO: baca dari saldo_awal saat multi-bulan
+
+    # Investasi baru: net kredit ke akun 311 dari jurnal umum periode ini
+    r_311 = (
+        db.query(
+            func.coalesce(func.sum(JurnalEntry.debet),  0).label("d"),
+            func.coalesce(func.sum(JurnalEntry.kredit), 0).label("k"),
+        )
+        .join(Transaksi)
+        .filter(
+            JurnalEntry.kode_akun == "311",
+            Transaksi.tanggal >= tgl_dari,
+            Transaksi.tanggal <= tgl_sampai,
+            Transaksi.jenis == "umum",
+        )
+        .first()
+    )
+    modal_investasi = max(
+        0.0,
+        float(Decimal(str(r_311.k)) - Decimal(str(r_311.d)))
+    )
+
+    prive_bal  = balances.get("312", (None, 0.0))[1]
+    akun_311   = balances.get("311", (None, 0.0))[0]
+    akun_312   = balances.get("312", (None, 0.0))[0]
+    nama_modal = akun_311.nama_akun if akun_311 else "Modal Pemilik"
+    nama_prive = akun_312.nama_akun if akun_312 else "Prive"
+
+    add_items:  list[tuple[str, float]] = []
+    less_items: list[tuple[str, float]] = []
+
+    if modal_investasi > 0:
+        add_items.append(("Investasi Modal", modal_investasi))
+    if net_lr > 0:
+        add_items.append(("Net Income", net_lr))
+    elif net_lr < 0:
+        less_items.append(("Net Loss", abs(net_lr)))
+    if prive_bal > 0:
+        less_items.append((nama_prive, prive_bal))
+
+    total_add   = sum(b for _, b in add_items)
+    total_less  = sum(b for _, b in less_items)
+    perubahan   = total_add - total_less
+    modal_akhir = modal_awal + perubahan
+
+    ekuitas = {
+        "modal_awal":    modal_awal,
+        "tgl_awal":      tgl_dari,
+        "tgl_akhir":     tgl_sampai,
+        "add_items":     add_items,
+        "less_items":    less_items,
+        "perubahan":     perubahan,
+        "modal_akhir":   modal_akhir,
+        "nama_modal":    nama_modal,
+    }
+
+    # ── Neraca ────────────────────────────────────────────────────────────────
+    aset_lancar = [
+        (a, b) for kode, (a, b) in balances.items()
+        if a.jenis_akun == "aset" and kode.startswith("11") and b > 0
+    ]
+    aset_tl = [
+        (a, b) for kode, (a, b) in balances.items()
+        if a.jenis_akun == "aset" and kode.startswith("12") and b > 0
+    ]
+    kewajiban_items = [
+        (a, b) for kode, (a, b) in balances.items()
+        if a.jenis_akun == "kewajiban" and b > 0
+    ]
+
+    total_al   = (sum(b for a, b in aset_lancar if not a.is_kontra)
+                - sum(b for a, b in aset_lancar if     a.is_kontra))
+    total_atl  = (sum(b for a, b in aset_tl    if not a.is_kontra)
+                - sum(b for a, b in aset_tl    if     a.is_kontra))
+    total_aset = total_al + total_atl
+    total_kwjbn = sum(b for _, b in kewajiban_items)
+    total_km    = total_kwjbn + modal_akhir
+
+    def _r(lbl, amt, rtype):
+        return (lbl, amt, rtype)
+
+    L: list = []
+    R: list = []
+
+    L.append(_r("Aset Lancar", None, "section"))
+    for a, b in aset_lancar:
+        L.append(_r(a.nama_akun, b, "item-kontra" if a.is_kontra else "item"))
+    L.append(_r("Total Aset Lancar", total_al, "subtotal"))
+    L.append(_r("", None, "spacer"))
+
+    L.append(_r("Aset Tidak Lancar", None, "section"))
+    for a, b in aset_tl:
+        L.append(_r(a.nama_akun, b, "item-kontra" if a.is_kontra else "item"))
+    L.append(_r("Total Aset Tidak Lancar", total_atl, "subtotal"))
+    L.append(_r("", None, "spacer"))
+
+    R.append(_r("Kewajiban Lancar", None, "section"))
+    for a, b in kewajiban_items:
+        R.append(_r(a.nama_akun, b, "item"))
+    R.append(_r("Total Kewajiban", total_kwjbn, "subtotal"))
+    R.append(_r("", None, "spacer"))
+
+    R.append(_r("Modal", None, "section"))
+    R.append(_r(nama_modal, modal_akhir, "item"))
+    R.append(_r("", None, "spacer"))
+
+    # Pad supaya baris Total sejajar
+    mx = max(len(L), len(R))
+    while len(L) < mx:
+        L.append(_r("", None, "spacer"))
+    while len(R) < mx:
+        R.append(_r("", None, "spacer"))
+
+    L.append(_r("Total Aset", total_aset, "total"))
+    R.append(_r("Total Kewajiban + Modal", total_km, "total"))
+
+    neraca = {
+        "rows":      list(zip(L, R)),
+        "total_aset": total_aset,
+        "total_km":   total_km,
+        "seimbang":   abs(total_aset - total_km) < 1.0,
+    }
+
+    fmt = request.query_params.get("format", "")
+    if fmt == "pdf":
+        from app.services.pdf import render_pdf
+        nama_perus = periode.nama_perusahaan if periode else ""
+        per_str    = f"Untuk Bulan yang Berakhir {_fmt_tgl(tgl_sampai)}"
+
+        if tab == "laba-rugi":
+            pdf_bytes = render_pdf("laba_rugi.html", {
+                "landscape": False, "nama_perusahaan": nama_perus,
+                "judul": "Laporan Laba Rugi", "periode_str": per_str,
+                "lr": laba_rugi,
+            })
+            return _pdf_response(pdf_bytes, f"laba_rugi_{tgl_sampai}.pdf")
+
+        elif tab == "ekuitas":
+            pdf_bytes = render_pdf("ekuitas.html", {
+                "landscape": False, "nama_perusahaan": nama_perus,
+                "judul": "Laporan Ekuitas Pemilik", "periode_str": per_str,
+                "ek": ekuitas,
+            })
+            return _pdf_response(pdf_bytes, f"ekuitas_{tgl_sampai}.pdf")
+
+        else:  # neraca
+            pdf_bytes = render_pdf("neraca.html", {
+                "landscape": False, "nama_perusahaan": nama_perus,
+                "judul": "Neraca", "periode_str": f"Per {_fmt_tgl(tgl_sampai)}",
+                "nr": neraca,
+            })
+            return _pdf_response(pdf_bytes, f"neraca_{tgl_sampai}.pdf")
+
+    return templates.TemplateResponse("laporan/keuangan.html", {
+        "request": request,
+        "tab":      tab,
+        "periode":  periode,
+        "laba_rugi": laba_rugi,
+        "ekuitas":   ekuitas,
+        "neraca":    neraca,
+        "tgl_dari":    tgl_dari,
+        "tgl_sampai":  tgl_sampai,
+        "extra_hidden": {"tab": tab},
+        **_filter_ctx(tgl_dari, tgl_sampai, presets, "/laporan/keuangan"),
     })
 
 

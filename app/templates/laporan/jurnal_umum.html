@@ -11,9 +11,8 @@
             &nbsp;·&nbsp; {{ page_transaksi_count }} dari {{ total_transaksi }} transaksi
         </p>
     </div>
-    <a href="/laporan/jurnal-umum/download?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}"
-       class="btn btn-secondary"
-       onclick="alert('Fitur download PDF belum tersedia.'); return false;">
+    <a href="/laporan/jurnal-umum?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
+       class="btn btn-secondary" target="_blank">
         ↓ Download PDF
     </a>
 </div>

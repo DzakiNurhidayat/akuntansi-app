@@ -9,9 +9,8 @@
             {{ tgl_dari.strftime('%d %b %Y') }} — {{ tgl_sampai.strftime('%d %b %Y') }}
         </p>
     </div>
-    <a href="/laporan/buku-besar/download?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}"
-       class="btn btn-secondary"
-       onclick="alert('Fitur download PDF belum tersedia.'); return false;">
+    <a href="/laporan/buku-besar?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
+       class="btn btn-secondary" target="_blank">
         ↓ Download PDF
     </a>
 </div>

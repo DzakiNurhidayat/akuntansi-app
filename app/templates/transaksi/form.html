@@ -101,52 +101,173 @@ function rupiah(n) {
     return 'Rp ' + Math.round(n).toLocaleString('id-ID');
 }
 
-function renderSelect(selectedValue) {
-    const groups = [
-        { label: 'Aset',       jenis: 'aset' },
-        { label: 'Kewajiban',  jenis: 'kewajiban' },
-        { label: 'Modal',      jenis: 'modal' },
-        { label: 'Pendapatan', jenis: 'pendapatan' },
-        { label: 'Beban',      jenis: 'beban' },
-    ];
-    let html = '<select name="kode_akun" class="form-control akun-select" required>';
-    html += '<option value="">— Pilih Akun —</option>';
-    for (const g of groups) {
-        const items = akunData.filter(a => a.jenis_akun === g.jenis);
-        if (!items.length) continue;
-        html += `<optgroup label="${g.label}">`;
-        for (const a of items) {
-            const sel = a.kode_akun === selectedValue ? ' selected' : '';
-            html += `<option value="${a.kode_akun}"${sel}>${a.kode_akun} — ${a.nama_akun}</option>`;
-        }
-        html += '</optgroup>';
+function createAkunSearch(kode) {
+    const wrap = document.createElement('div');
+    wrap.className = 'akun-search-wrap';
+
+    const found = kode ? akunData.find(a => a.kode_akun === kode) : null;
+
+    // Text input
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.className = 'form-control akun-search-input';
+    textInput.placeholder = 'Cari kode atau nama akun…';
+    textInput.autocomplete = 'off';
+
+    // Hidden input (nilai yang dikirim ke server)
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.name = 'kode_akun';
+
+    // Dropdown
+    const dropdown = document.createElement('div');
+    dropdown.className = 'akun-dropdown';
+
+    wrap.appendChild(textInput);
+    wrap.appendChild(hiddenInput);
+    wrap.appendChild(dropdown);
+
+    let activeIdx = -1;
+
+    function setSelected(akun) {
+        hiddenInput.value = akun ? akun.kode_akun : '';
+        textInput.value   = akun ? `${akun.kode_akun} — ${akun.nama_akun}` : '';
+        wrap.classList.toggle('has-value', !!akun);
+        dropdown.style.display = 'none';
+        updateTotals();
     }
-    html += '</select>';
-    return html;
+
+    // Init dengan nilai awal (mode edit)
+    if (found) setSelected(found);
+
+    function getMatches(q) {
+        if (!q.trim()) return [];
+        const lq = q.toLowerCase();
+        return akunData.filter(a =>
+            a.kode_akun.toLowerCase().includes(lq) ||
+            a.nama_akun.toLowerCase().includes(lq)
+        ).slice(0, 10);
+    }
+
+    function renderDropdown(matches) {
+        if (!matches.length) { dropdown.style.display = 'none'; return; }
+        dropdown.innerHTML = '';
+        matches.forEach(a => {
+            const opt = document.createElement('div');
+            opt.className = 'akun-option';
+            opt.dataset.kode = a.kode_akun;
+            opt.innerHTML =
+                `<code class="akun-opt-kode">${a.kode_akun}</code>` +
+                `<span class="akun-opt-nama">${a.nama_akun}</span>` +
+                `<span class="badge badge-${a.jenis_akun} akun-opt-jenis">${a.jenis_akun}</span>`;
+            opt.addEventListener('mousedown', e => {
+                e.preventDefault();
+                setSelected(akunData.find(x => x.kode_akun === a.kode_akun));
+            });
+            dropdown.appendChild(opt);
+        });
+        activeIdx = -1;
+        dropdown.style.display = 'block';
+    }
+
+    function highlightOption(idx) {
+        const opts = dropdown.querySelectorAll('.akun-option');
+        opts.forEach((o, i) => o.classList.toggle('active', i === idx));
+        if (idx >= 0 && opts[idx]) opts[idx].scrollIntoView({ block: 'nearest' });
+    }
+
+    textInput.addEventListener('input', function () {
+        // Saat user mengetik, batalkan pilihan sebelumnya
+        hiddenInput.value = '';
+        wrap.classList.remove('has-value');
+        renderDropdown(getMatches(this.value));
+    });
+
+    textInput.addEventListener('focus', function () {
+        // Jika belum ada pilihan, tampilkan dropdown dari teks saat ini
+        if (!hiddenInput.value && this.value.trim()) {
+            renderDropdown(getMatches(this.value));
+        }
+    });
+
+    textInput.addEventListener('blur', function () {
+        setTimeout(() => {
+            dropdown.style.display = 'none';
+            // Jika tidak ada akun terpilih, kosongkan teks
+            if (!hiddenInput.value) this.value = '';
+        }, 160);
+    });
+
+    textInput.addEventListener('keydown', function (e) {
+        const opts = dropdown.querySelectorAll('.akun-option');
+        if (!opts.length || dropdown.style.display === 'none') return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIdx = Math.min(activeIdx + 1, opts.length - 1);
+            highlightOption(activeIdx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIdx = Math.max(activeIdx - 1, 0);
+            highlightOption(activeIdx);
+        } else if (e.key === 'Enter' && activeIdx >= 0) {
+            e.preventDefault();
+            setSelected(akunData.find(x => x.kode_akun === opts[activeIdx].dataset.kode));
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    return wrap;
+}
+
+function makeInput(name, value, placeholder) {
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.name = name;
+    inp.className = 'form-control amount-input';
+    inp.min = '0'; inp.step = '1';
+    inp.value = value || ''; inp.placeholder = placeholder;
+    inp.style.textAlign = 'right';
+    inp.addEventListener('input', () => onAmountInput(inp));
+    return inp;
 }
 
 function addRow(kode = '', debet = 0, kredit = 0) {
     const tbody = document.getElementById('entries-tbody');
     const idx = tbody.rows.length;
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-        <td class="row-num" style="text-align:center; color:#7f8c8d; font-size:0.8rem;">${idx + 1}</td>
-        <td>${renderSelect(kode)}</td>
-        <td style="padding:0.4rem 0.5rem;">
-            <input type="number" name="debet" class="form-control amount-input"
-                   min="0" step="1" value="${debet || ''}" placeholder="0"
-                   oninput="onAmountInput(this)" style="text-align:right;">
-        </td>
-        <td style="padding:0.4rem 0.5rem;">
-            <input type="number" name="kredit" class="form-control amount-input"
-                   min="0" step="1" value="${kredit || ''}" placeholder="0"
-                   oninput="onAmountInput(this)" style="text-align:right;">
-        </td>
-        <td style="text-align:center; padding:0.4rem;">
-            <button type="button" class="btn btn-sm btn-danger"
-                    onclick="removeRow(this)" title="Hapus baris">&times;</button>
-        </td>
-    `;
+
+    // #
+    const tdNum = document.createElement('td');
+    tdNum.className = 'row-num';
+    tdNum.style.cssText = 'text-align:center; color:#7f8c8d; font-size:0.8rem;';
+    tdNum.textContent = idx + 1;
+
+    // Akun search
+    const tdAkun = document.createElement('td');
+    tdAkun.appendChild(createAkunSearch(kode));
+
+    // Debet
+    const tdDebet = document.createElement('td');
+    tdDebet.style.cssText = 'padding:0.4rem 0.5rem;';
+    tdDebet.appendChild(makeInput('debet', debet, '0'));
+
+    // Kredit
+    const tdKredit = document.createElement('td');
+    tdKredit.style.cssText = 'padding:0.4rem 0.5rem;';
+    tdKredit.appendChild(makeInput('kredit', kredit, '0'));
+
+    // Hapus
+    const tdHapus = document.createElement('td');
+    tdHapus.style.cssText = 'text-align:center; padding:0.4rem;';
+    const btnHapus = document.createElement('button');
+    btnHapus.type = 'button';
+    btnHapus.className = 'btn btn-sm btn-danger';
+    btnHapus.title = 'Hapus baris';
+    btnHapus.textContent = '×';
+    btnHapus.addEventListener('click', () => removeRow(btnHapus));
+    tdHapus.appendChild(btnHapus);
+
+    tr.append(tdNum, tdAkun, tdDebet, tdKredit, tdHapus);
     tbody.appendChild(tr);
     updateRowNumbers();
     updateTotals();
@@ -175,9 +296,9 @@ function onAmountInput(input) {
         const myRow = input.closest('tr');
         const partnerRow = rows.find(r => r !== myRow);
         const isDebet = input.name === 'debet';
-        const partnerField = partnerRow.querySelector(`[name="${isDebet ? 'kredit' : 'debet'}"]`);
+        const partnerField = partnerRow.querySelector(`input[name="${isDebet ? 'kredit' : 'debet'}"]`);
         const val = parseFloat(input.value) || 0;
-        partnerField.value = val > 0 ? val : '';
+        if (partnerField) partnerField.value = val > 0 ? val : '';
     }
     updateTotals();
 }

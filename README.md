@@ -163,7 +163,7 @@ jurnal_entry   → id, transaksi_id (FK), kode_akun (FK), debet, kredit, urutan
 - [x] Jurnal Umum (dengan pagination per transaksi)
 - [x] Buku Besar (dengan REF ke halaman Jurnal Umum)
 - [x] Neraca Saldo
-- [ ] Kertas Kerja (Worksheet)
+- [x] Kertas Kerja (Worksheet)
 - [ ] Laporan Keuangan (L/R, Perubahan Modal, Neraca)
 - [ ] Jurnal Penutup (auto-generate)
 - [ ] Deploy ke Render + Supabase

@@ -1,0 +1,33 @@
+{% extends "_base.html" %}
+{% block content %}
+<table>
+    <thead>
+        <tr>
+            <th style="width:10%">Kode</th>
+            <th style="width:46%">Nama Akun</th>
+            <th style="width:22%">Debet</th>
+            <th style="width:22%">Kredit</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td class="kode" style="font-family:monospace;">{{ row.akun.kode_akun }}</td>
+            <td>{{ row.akun.nama_akun }}</td>
+            <td class="num">{% if row.debet > 0 %}{{ row.debet | rupiah }}{% endif %}</td>
+            <td class="num">{% if row.kredit > 0 %}{{ row.kredit | rupiah }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="total-row">
+            <td colspan="2" class="bold">Total</td>
+            <td class="num">{{ sum_debet | rupiah }}</td>
+            <td class="num">{{ sum_kredit | rupiah }}</td>
+        </tr>
+    </tfoot>
+</table>
+{% if not seimbang %}
+<p style="color:#c00;font-weight:bold;margin-top:6pt;">⚠ Neraca saldo tidak seimbang!</p>
+{% endif %}
+{% endblock %}
