@@ -13,6 +13,9 @@ class Akun(Base):
     saldo_normal = Column(String(10), nullable=False)
     is_kontra = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    # Akun universal = bisa dipakai SEMUA user (admin & non-admin), tanpa perlu
+    # di-assign. Contoh: Kas, akun bersama, dll.
+    is_universal = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     
     __table_args__ = (

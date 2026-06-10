@@ -1,0 +1,29 @@
+{# Reusable shortcut navigation arrows for cycle reports.
+
+Variables (set by parent template before include):
+  ws_prev_url   - URL halaman sebelumnya (optional)
+  ws_prev_label - Label tombol prev (optional)
+  ws_next_url   - URL halaman berikutnya (optional)
+  ws_next_label - Label tombol next (optional)
+#}
+{% if ws_prev_url or ws_next_url %}
+<div class="workflow-nav">
+    {% if ws_prev_url %}
+    <a href="{{ ws_prev_url }}" class="workflow-nav-btn workflow-nav-prev" title="Sebelumnya: {{ ws_prev_label }}">
+        <span class="workflow-arrow">←</span>
+        <span class="workflow-label">{{ ws_prev_label }}</span>
+    </a>
+    {% else %}
+    <span></span>
+    {% endif %}
+
+    {% if ws_next_url %}
+    <a href="{{ ws_next_url }}" class="workflow-nav-btn workflow-nav-next" title="Berikutnya: {{ ws_next_label }}">
+        <span class="workflow-label">{{ ws_next_label }}</span>
+        <span class="workflow-arrow">→</span>
+    </a>
+    {% else %}
+    <span></span>
+    {% endif %}
+</div>
+{% endif %}

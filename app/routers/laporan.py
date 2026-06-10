@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.models import Akun, Periode, Transaksi, JurnalEntry
+from app.models import Akun, Periode, Transaksi, JurnalEntry, SaldoAwal
 from app.templates_env import templates
 
 router = APIRouter(prefix="/laporan", tags=["laporan"])
 
 JENIS_LAPORAN = ["umum"]
-PAGE_SIZE = 10  # transaksi per halaman Jurnal Umum
+JENIS_PENYESUAIAN = ["penyesuaian"]
+PAGE_SIZE = 10  # transaksi per halaman Jurnal Umum / Penyesuaian
 
 _BULAN_ID = [
     '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -23,6 +24,19 @@ _BULAN_ID = [
 def _fmt_tgl(d) -> str:
     return f"{d.day} {_BULAN_ID[d.month]} {d.year}"
 
+
+def _fmt_tgl_mdy(d) -> str:
+    """Format 'Januari 31 2005' — khusus judul laporan Excel."""
+    return f"{_BULAN_ID[d.month]} {d.day} {d.year}"
+
+
+def _periode_str_xlsx(tgl_sampai, *, point_in_time: bool = False) -> str:
+    """Judul periode untuk Excel sesuai aturan: 'Per ...' (point-in-time)
+    atau 'Untuk Bulan yang berakhir pada ...' (range)."""
+    if point_in_time:
+        return f"Per {_fmt_tgl_mdy(tgl_sampai)}"
+    return f"Untuk Bulan yang berakhir pada {_fmt_tgl_mdy(tgl_sampai)}"
+
 def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
     return Response(
         content=pdf_bytes,
@@ -31,7 +45,51 @@ def _pdf_response(pdf_bytes: bytes, filename: str) -> Response:
     )
 
 
+def _xlsx_response(xlsx_bytes: bytes, filename: str) -> Response:
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def _is_single_period(tgl_dari, tgl_sampai) -> bool:
+    """True jika filter berada dalam satu bulan/periode (year+month sama)."""
+    return tgl_dari.year == tgl_sampai.year and tgl_dari.month == tgl_sampai.month
+
+
+def _saldo_awal_map(db: Session, periode_id: int) -> dict[str, Decimal]:
+    """Return {kode_akun: saldo_awal_positif_di_sisi_normal} untuk periode."""
+    rows = db.query(SaldoAwal).filter(SaldoAwal.periode_id == periode_id).all()
+    return {r.kode_akun: Decimal(str(r.saldo)) for r in rows}
+
+
+def _saldo_awal_jika_satu_periode(db: Session, tgl_dari, tgl_sampai):
+    """Return (periode, saldo_map). Kosong kalau filter > 1 bulan."""
+    if not _is_single_period(tgl_dari, tgl_sampai):
+        return None, {}
+    p = _active_periode(db, tgl_sampai)
+    if not p:
+        return None, {}
+    return p, _saldo_awal_map(db, p.id)
+
+
+def _saldo_awal_dr(saldo_awal_map: dict, kode_akun: str, saldo_normal: str) -> Decimal:
+    """Saldo awal dalam basis Debet−Kredit (debet positif)."""
+    v = saldo_awal_map.get(kode_akun, Decimal("0"))
+    return v if saldo_normal == "debet" else -v
+
+
+def _active_periode(db: Session, tgl_sampai) -> Periode | None:
+    """Periode yang mengandung tgl_sampai (untuk membaca saldo_awal)."""
+    return (
+        db.query(Periode)
+        .filter(Periode.tahun == tgl_sampai.year, Periode.bulan == tgl_sampai.month)
+        .first()
+    )
+
 
 def _anchor(db: Session):
     latest = (
@@ -100,19 +158,28 @@ def _filter_ctx(tgl_dari, tgl_sampai, presets, base_url: str):
 
 
 def _build_ju_page_map(db: Session) -> dict:
+    """Peta {jurnal_entry.id → nomor halaman JU} yang DIRESET per periode.
+
+    Setiap periode dimulai dari JU1 — tidak melanjutkan nomor halaman dari periode
+    sebelumnya. Halaman dihitung per TRANSAKSI dengan PAGE_SIZE per halaman; semua
+    entry dalam satu transaksi mendapat nomor halaman yang sama.
     """
-    Peta global: jurnal_entry.id → nomor halaman JU (JU1, JU2, dst.)
-    Dihitung per TRANSAKSI (15 transaksi/halaman).
-    Semua entry dalam satu transaksi mendapat nomor halaman yang sama.
-    """
-    # 1. Halaman per transaksi
-    trx_ids = (
-        db.query(Transaksi.id)
+    # 1. Halaman per transaksi — ORDER BY periode_id untuk reset per-periode
+    trx_rows = (
+        db.query(Transaksi.id, Transaksi.periode_id)
         .filter(Transaksi.jenis.in_(JENIS_LAPORAN))
-        .order_by(Transaksi.tanggal, Transaksi.id)
+        .order_by(Transaksi.periode_id, Transaksi.tanggal, Transaksi.id)
         .all()
     )
-    trx_page = {tid: (i // PAGE_SIZE) + 1 for i, (tid,) in enumerate(trx_ids)}
+    trx_page: dict[int, int] = {}
+    last_pid = None
+    idx_in_periode = 0
+    for tid, pid in trx_rows:
+        if pid != last_pid:
+            idx_in_periode = 0
+            last_pid = pid
+        trx_page[tid] = (idx_in_periode // PAGE_SIZE) + 1
+        idx_in_periode += 1
 
     # 2. Propagasi ke setiap entry
     entries = (
@@ -175,19 +242,21 @@ def jurnal_umum(request: Request, db: Session = Depends(get_db)):
     page_debet  = sum(float(r["entry"].debet)  for r in rows)
     page_kredit = sum(float(r["entry"].kredit) for r in rows)
 
-    # ── PDF export ────────────────────────────────────────────────────────────
-    if fmt == "pdf":
-        from app.services.pdf import render_pdf
+    # ── Export PDF / XLSX ─────────────────────────────────────────────────────
+    if fmt in ("pdf", "xlsx"):
         periode_obj = (
             db.query(Periode)
             .order_by(Periode.tahun.desc(), Periode.bulan.desc())
             .first()
         )
-        pdf_rows = []
+        nama_perus = periode_obj.nama_perusahaan if periode_obj else ""
+        per_str    = f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}"
+
+        export_rows = []
         for t in all_transaksi:
             entries = list(t.entries)
             for i, e in enumerate(entries):
-                pdf_rows.append({
+                export_rows.append({
                     "tanggal":    t.tanggal.strftime("%d/%m") if i == 0 else "",
                     "keterangan": (t.keterangan or "") if i == 0 else "",
                     "kode":       e.akun.kode_akun,
@@ -196,15 +265,24 @@ def jurnal_umum(request: Request, db: Session = Depends(get_db)):
                     "debet":      float(e.debet),
                     "kredit":     float(e.kredit),
                 })
-        pdf_bytes = render_pdf("jurnal_umum.html", {
-            "landscape":       False,
-            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
-            "judul":           "Jurnal Umum",
-            "periode_str":     f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}",
-            "rows":            pdf_rows,
-            "grand_total":     grand_total,
-        })
-        return _pdf_response(pdf_bytes, f"jurnal_umum_{tgl_dari}_{tgl_sampai}.pdf")
+
+        if fmt == "pdf":
+            from app.services.pdf import render_pdf
+            pdf_bytes = render_pdf("jurnal_umum.html", {
+                "landscape":       False,
+                "nama_perusahaan": nama_perus,
+                "judul":           "Jurnal Umum",
+                "periode_str":     per_str,
+                "rows":            export_rows,
+                "grand_total":     grand_total,
+            })
+            return _pdf_response(pdf_bytes, f"jurnal_umum_{tgl_dari}_{tgl_sampai}.pdf")
+
+        from app.services.excel import build_jurnal_umum
+        xlsx_bytes = build_jurnal_umum(
+            nama_perus, _periode_str_xlsx(tgl_sampai), export_rows, grand_total,
+        )
+        return _xlsx_response(xlsx_bytes, f"jurnal_umum_{tgl_dari}_{tgl_sampai}.xlsx")
 
     return templates.TemplateResponse("laporan/jurnal_umum.html", {
         "request": request,
@@ -220,6 +298,112 @@ def jurnal_umum(request: Request, db: Session = Depends(get_db)):
     })
 
 
+# ─── Jurnal Penyesuaian ──────────────────────────────────────────────────────
+
+@router.get("/jurnal-penyesuaian")
+def jurnal_penyesuaian(request: Request, db: Session = Depends(get_db)):
+    """Sama seperti Jurnal Umum, tapi filter jenis='penyesuaian' dan tanpa kolom Ref."""
+    tgl_dari, tgl_sampai, presets = _parse_filter(request, db)
+    fmt  = request.query_params.get("format", "")
+    page = max(1, int(request.query_params.get("page", 1) or 1))
+
+    all_transaksi = (
+        db.query(Transaksi)
+        .filter(
+            Transaksi.tanggal >= tgl_dari,
+            Transaksi.tanggal <= tgl_sampai,
+            Transaksi.jenis.in_(JENIS_PENYESUAIAN),
+        )
+        .order_by(Transaksi.tanggal, Transaksi.id)
+        .all()
+    )
+
+    total_transaksi = len(all_transaksi)
+    total_pages = max(1, (total_transaksi + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+
+    start = (page - 1) * PAGE_SIZE
+    page_transaksi = all_transaksi[start: start + PAGE_SIZE]
+
+    rows = []
+    for t in page_transaksi:
+        entries = list(t.entries)
+        for i, entry in enumerate(entries):
+            rows.append({
+                "tanggal": t.tanggal,
+                "show_day": i == 0,
+                "is_last": i == len(entries) - 1,
+                "entry": entry,
+            })
+
+    last_my = None
+    for row in rows:
+        my = row["tanggal"].strftime("%m, %Y")
+        row["show_my"] = my != last_my
+        last_my = my
+
+    grand_total = sum(float(e.debet) for t in all_transaksi for e in t.entries)
+    page_debet  = sum(float(r["entry"].debet)  for r in rows)
+    page_kredit = sum(float(r["entry"].kredit) for r in rows)
+
+    # ── Export PDF / XLSX (tanpa kolom Ref) ───────────────────────────────────
+    if fmt in ("pdf", "xlsx"):
+        periode_obj = (
+            db.query(Periode)
+            .order_by(Periode.tahun.desc(), Periode.bulan.desc())
+            .first()
+        )
+        nama_perus = periode_obj.nama_perusahaan if periode_obj else ""
+        per_str    = f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}"
+
+        export_rows = []
+        for t in all_transaksi:
+            entries = list(t.entries)
+            for i, e in enumerate(entries):
+                export_rows.append({
+                    "tanggal":    t.tanggal.strftime("%d/%m") if i == 0 else "",
+                    "keterangan": (t.keterangan or "") if i == 0 else "",
+                    "kode":       e.akun.kode_akun,
+                    "akun":       e.akun.nama_akun,
+                    "is_kredit":  e.kredit > 0,
+                    "debet":      float(e.debet),
+                    "kredit":     float(e.kredit),
+                })
+
+        if fmt == "pdf":
+            from app.services.pdf import render_pdf
+            pdf_bytes = render_pdf("jurnal_penyesuaian.html", {
+                "landscape":       False,
+                "nama_perusahaan": nama_perus,
+                "judul":           "Jurnal Penyesuaian",
+                "periode_str":     per_str,
+                "rows":            export_rows,
+                "grand_total":     grand_total,
+            })
+            return _pdf_response(pdf_bytes, f"jurnal_penyesuaian_{tgl_dari}_{tgl_sampai}.pdf")
+
+        from app.services.excel import build_jurnal_penyesuaian
+        xlsx_bytes = build_jurnal_penyesuaian(
+            nama_perus, _periode_str_xlsx(tgl_sampai), export_rows, grand_total,
+        )
+        return _xlsx_response(
+            xlsx_bytes, f"jurnal_penyesuaian_{tgl_dari}_{tgl_sampai}.xlsx",
+        )
+
+    return templates.TemplateResponse("laporan/jurnal_penyesuaian.html", {
+        "request": request,
+        "rows": rows,
+        "page": page,
+        "total_pages": total_pages,
+        "total_transaksi": total_transaksi,
+        "page_transaksi_count": len(page_transaksi),
+        "grand_total": grand_total,
+        "page_debet": page_debet,
+        "page_kredit": page_kredit,
+        **_filter_ctx(tgl_dari, tgl_sampai, presets, "/laporan/jurnal-penyesuaian"),
+    })
+
+
 # ─── Buku Besar ──────────────────────────────────────────────────────────────
 
 @router.get("/buku-besar")
@@ -231,6 +415,12 @@ def buku_besar(request: Request, db: Session = Depends(get_db)):
     ju_page_map = _build_ju_page_map(db)
 
     akun_list = db.query(Akun).order_by(Akun.kode_akun).all()
+    periode_aktif, saldo_awal_map = _saldo_awal_jika_satu_periode(db, tgl_dari, tgl_sampai)
+
+    # Tanggal Saldo Awal SELALU hari pertama periode aktif (hanya dipakai kalau filter=1 bulan)
+    tgl_saldo_awal = (
+        date(periode_aktif.tahun, periode_aktif.bulan, 1) if periode_aktif else tgl_dari
+    )
 
     ledger = []
     for akun in akun_list:
@@ -246,11 +436,23 @@ def buku_besar(request: Request, db: Session = Depends(get_db)):
             .order_by(Transaksi.tanggal, Transaksi.id, JurnalEntry.urutan)
             .all()
         )
-        if not entries:
+        saldo_awal_val = saldo_awal_map.get(akun.kode_akun, Decimal("0"))
+        if not entries and saldo_awal_val == 0:
             continue
 
-        saldo = Decimal("0")
+        saldo = saldo_awal_val  # opening balance di sisi normal
         rows = []
+        # Baris pembuka "Saldo Awal" — selalu ditambahkan jika ada saldo awal
+        if saldo_awal_val != 0:
+            rows.append({
+                "tanggal": tgl_saldo_awal,
+                "keterangan": "Saldo Awal",
+                "ref": "—",
+                "ref_page": 0,
+                "debet": float(saldo_awal_val) if akun.saldo_normal == "debet" else 0.0,
+                "kredit": float(saldo_awal_val) if akun.saldo_normal == "kredit" else 0.0,
+                "saldo": float(saldo),
+            })
         for e in entries:
             d = Decimal(str(e.debet))
             k = Decimal(str(e.kredit))
@@ -272,21 +474,31 @@ def buku_besar(request: Request, db: Session = Depends(get_db)):
             "rows": rows,
         })
 
-    if fmt == "pdf":
-        from app.services.pdf import render_pdf
+    if fmt in ("pdf", "xlsx"):
         periode_obj = (
             db.query(Periode)
             .order_by(Periode.tahun.desc(), Periode.bulan.desc())
             .first()
         )
-        pdf_bytes = render_pdf("buku_besar.html", {
-            "landscape":       False,
-            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
-            "judul":           "Buku Besar",
-            "periode_str":     f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}",
-            "ledger":          ledger,
-        })
-        return _pdf_response(pdf_bytes, f"buku_besar_{tgl_dari}_{tgl_sampai}.pdf")
+        nama_perus = periode_obj.nama_perusahaan if periode_obj else ""
+        per_str    = f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}"
+
+        if fmt == "pdf":
+            from app.services.pdf import render_pdf
+            pdf_bytes = render_pdf("buku_besar.html", {
+                "landscape":       False,
+                "nama_perusahaan": nama_perus,
+                "judul":           "Buku Besar",
+                "periode_str":     per_str,
+                "ledger":          ledger,
+            })
+            return _pdf_response(pdf_bytes, f"buku_besar_{tgl_dari}_{tgl_sampai}.pdf")
+
+        from app.services.excel import build_buku_besar
+        xlsx_bytes = build_buku_besar(
+            nama_perus, _periode_str_xlsx(tgl_sampai), ledger,
+        )
+        return _xlsx_response(xlsx_bytes, f"buku_besar_{tgl_dari}_{tgl_sampai}.xlsx")
 
     return templates.TemplateResponse("laporan/buku_besar.html", {
         "request": request,
@@ -303,6 +515,7 @@ def neraca_saldo(request: Request, db: Session = Depends(get_db)):
     fmt = request.query_params.get("format", "")
 
     akun_list = db.query(Akun).order_by(Akun.kode_akun).all()
+    _, saldo_awal_map = _saldo_awal_jika_satu_periode(db, tgl_dari, tgl_sampai)
 
     rows = []
     sum_debet = Decimal("0")
@@ -327,6 +540,14 @@ def neraca_saldo(request: Request, db: Session = Depends(get_db)):
         total_d = Decimal(str(result.total_d))
         total_k = Decimal(str(result.total_k))
 
+        # Tambahkan saldo awal (positif di sisi normal)
+        sa = saldo_awal_map.get(akun.kode_akun, Decimal("0"))
+        if sa != 0:
+            if akun.saldo_normal == "debet":
+                total_d += sa
+            else:
+                total_k += sa
+
         if total_d == 0 and total_k == 0:
             continue
 
@@ -343,24 +564,35 @@ def neraca_saldo(request: Request, db: Session = Depends(get_db)):
         sum_debet += Decimal(str(col_debet))
         sum_kredit += Decimal(str(col_kredit))
 
-    if fmt == "pdf":
-        from app.services.pdf import render_pdf
+    if fmt in ("pdf", "xlsx"):
         periode_obj = (
             db.query(Periode)
             .order_by(Periode.tahun.desc(), Periode.bulan.desc())
             .first()
         )
-        pdf_bytes = render_pdf("neraca_saldo.html", {
-            "landscape":       False,
-            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
-            "judul":           "Neraca Saldo",
-            "periode_str":     f"Per {_fmt_tgl(tgl_sampai)}",
-            "rows":            rows,
-            "sum_debet":       float(sum_debet),
-            "sum_kredit":      float(sum_kredit),
-            "seimbang":        sum_debet == sum_kredit,
-        })
-        return _pdf_response(pdf_bytes, f"neraca_saldo_{tgl_sampai}.pdf")
+        nama_perus = periode_obj.nama_perusahaan if periode_obj else ""
+        per_str    = f"Per {_fmt_tgl(tgl_sampai)}"
+
+        if fmt == "pdf":
+            from app.services.pdf import render_pdf
+            pdf_bytes = render_pdf("neraca_saldo.html", {
+                "landscape":       False,
+                "nama_perusahaan": nama_perus,
+                "judul":           "Neraca Saldo",
+                "periode_str":     per_str,
+                "rows":            rows,
+                "sum_debet":       float(sum_debet),
+                "sum_kredit":      float(sum_kredit),
+                "seimbang":        sum_debet == sum_kredit,
+            })
+            return _pdf_response(pdf_bytes, f"neraca_saldo_{tgl_sampai}.pdf")
+
+        from app.services.excel import build_neraca_saldo
+        xlsx_bytes = build_neraca_saldo(
+            nama_perus, _periode_str_xlsx(tgl_sampai, point_in_time=True),
+            rows, float(sum_debet), float(sum_kredit), sum_debet == sum_kredit,
+        )
+        return _xlsx_response(xlsx_bytes, f"neraca_saldo_{tgl_sampai}.xlsx")
 
     return templates.TemplateResponse("laporan/neraca_saldo.html", {
         "request": request,
@@ -408,12 +640,22 @@ def worksheet(request: Request, db: Session = Depends(get_db)):
             return (0.0, float(-net)) if saldo_normal == "debet" else (float(-net), 0.0)
         return 0.0, 0.0
 
+    _, saldo_awal_map = _saldo_awal_jika_satu_periode(db, tgl_dari, tgl_sampai)
+
     rows = []
     for akun in akun_list:
         ns_d_raw,  ns_k_raw  = raw_sums(akun.kode_akun, ["umum"])
         ajp_d_raw, ajp_k_raw = raw_sums(akun.kode_akun, ["penyesuaian"])
 
-        # Kolom NS — saldo bersih dari jurnal umum
+        # Tambahkan saldo awal ke kolom NS (sisi normal) — hanya jika filter 1 periode
+        sa = saldo_awal_map.get(akun.kode_akun, Decimal("0"))
+        if sa != 0:
+            if akun.saldo_normal == "debet":
+                ns_d_raw += sa
+            else:
+                ns_k_raw += sa
+
+        # Kolom NS — saldo bersih dari jurnal umum + saldo awal
         ns_d, ns_k = net_col(ns_d_raw, ns_k_raw, akun.saldo_normal)
 
         # Kolom AJP — jumlah mentah debet & kredit dari AJP
@@ -476,24 +718,35 @@ def worksheet(request: Request, db: Session = Depends(get_db)):
         "n_k":  totals["n_k"]  + selisih["n_k"],
     }
 
-    if fmt == "pdf":
-        from app.services.pdf import render_pdf
+    if fmt in ("pdf", "xlsx"):
         periode_obj = (
             db.query(Periode)
             .order_by(Periode.tahun.desc(), Periode.bulan.desc())
             .first()
         )
-        pdf_bytes = render_pdf("worksheet.html", {
-            "landscape":       True,
-            "nama_perusahaan": periode_obj.nama_perusahaan if periode_obj else "",
-            "judul":           "Kertas Kerja (Neraca Lajur)",
-            "periode_str":     f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}",
-            "rows":            rows,
-            "totals":          totals,
-            "selisih":         selisih,
-            "grand":           grand,
-        })
-        return _pdf_response(pdf_bytes, f"worksheet_{tgl_dari}_{tgl_sampai}.pdf")
+        nama_perus = periode_obj.nama_perusahaan if periode_obj else ""
+        per_str    = f"Periode {_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}"
+
+        if fmt == "pdf":
+            from app.services.pdf import render_pdf
+            pdf_bytes = render_pdf("worksheet.html", {
+                "landscape":       True,
+                "nama_perusahaan": nama_perus,
+                "judul":           "Kertas Kerja (Neraca Lajur)",
+                "periode_str":     per_str,
+                "rows":            rows,
+                "totals":          totals,
+                "selisih":         selisih,
+                "grand":           grand,
+            })
+            return _pdf_response(pdf_bytes, f"worksheet_{tgl_dari}_{tgl_sampai}.pdf")
+
+        from app.services.excel import build_worksheet
+        xlsx_bytes = build_worksheet(
+            nama_perus, _periode_str_xlsx(tgl_sampai),
+            rows, totals, selisih, grand,
+        )
+        return _xlsx_response(xlsx_bytes, f"worksheet_{tgl_dari}_{tgl_sampai}.xlsx")
 
     return templates.TemplateResponse("laporan/worksheet.html", {
         "request": request,
@@ -520,9 +773,10 @@ def keuangan(request: Request, db: Session = Depends(get_db)):
 
     akun_list = db.query(Akun).order_by(Akun.kode_akun).all()
     JENIS_ALL = ["umum", "penyesuaian"]
+    _, saldo_awal_map_local = _saldo_awal_jika_satu_periode(db, tgl_dari, tgl_sampai)
 
     def nsd_bal(kode, saldo_normal):
-        """Saldo NSD (umum+penyesuaian), selalu >= 0 dari sisi saldo normal."""
+        """Saldo NSD (saldo_awal + umum+penyesuaian), >= 0 dari sisi normal."""
         r = (
             db.query(
                 func.coalesce(func.sum(JurnalEntry.debet), 0).label("d"),
@@ -539,6 +793,8 @@ def keuangan(request: Request, db: Session = Depends(get_db)):
         )
         d, k = Decimal(str(r.d)), Decimal(str(r.k))
         net = (d - k) if saldo_normal == "debet" else (k - d)
+        # saldo awal sudah dalam sisi normal — langsung ditambahkan
+        net += saldo_awal_map_local.get(kode, Decimal("0"))
         return float(net) if net > 0 else 0.0
 
     balances: dict[str, tuple] = {}
@@ -568,7 +824,8 @@ def keuangan(request: Request, db: Session = Depends(get_db)):
     }
 
     # ── Ekuitas Pemilik ───────────────────────────────────────────────────────
-    modal_awal = 0.0  # TODO: baca dari saldo_awal saat multi-bulan
+    # Modal awal = saldo_awal akun 311 (carry-forward dari periode sebelumnya)
+    modal_awal = float(saldo_awal_map_local.get("311", Decimal("0")))
 
     # Investasi baru: net kredit ke akun 311 dari jurnal umum periode ini
     r_311 = (
@@ -692,34 +949,47 @@ def keuangan(request: Request, db: Session = Depends(get_db)):
     }
 
     fmt = request.query_params.get("format", "")
-    if fmt == "pdf":
-        from app.services.pdf import render_pdf
+    if fmt in ("pdf", "xlsx"):
         nama_perus = periode.nama_perusahaan if periode else ""
         per_str    = f"Untuk Bulan yang Berakhir {_fmt_tgl(tgl_sampai)}"
 
+        if fmt == "pdf":
+            from app.services.pdf import render_pdf
+            if tab == "laba-rugi":
+                pdf_bytes = render_pdf("laba_rugi.html", {
+                    "landscape": False, "nama_perusahaan": nama_perus,
+                    "judul": "Laporan Laba Rugi", "periode_str": per_str,
+                    "lr": laba_rugi,
+                })
+                return _pdf_response(pdf_bytes, f"laba_rugi_{tgl_sampai}.pdf")
+            elif tab == "ekuitas":
+                pdf_bytes = render_pdf("ekuitas.html", {
+                    "landscape": False, "nama_perusahaan": nama_perus,
+                    "judul": "Laporan Ekuitas Pemilik", "periode_str": per_str,
+                    "ek": ekuitas,
+                })
+                return _pdf_response(pdf_bytes, f"ekuitas_{tgl_sampai}.pdf")
+            else:  # neraca
+                pdf_bytes = render_pdf("neraca.html", {
+                    "landscape": False, "nama_perusahaan": nama_perus,
+                    "judul": "Neraca", "periode_str": f"Per {_fmt_tgl(tgl_sampai)}",
+                    "nr": neraca,
+                })
+                return _pdf_response(pdf_bytes, f"neraca_{tgl_sampai}.pdf")
+
+        # XLSX
+        from app.services.excel import build_laba_rugi, build_ekuitas, build_neraca
+        per_str_xlsx_range = _periode_str_xlsx(tgl_sampai)
+        per_str_xlsx_point = _periode_str_xlsx(tgl_sampai, point_in_time=True)
         if tab == "laba-rugi":
-            pdf_bytes = render_pdf("laba_rugi.html", {
-                "landscape": False, "nama_perusahaan": nama_perus,
-                "judul": "Laporan Laba Rugi", "periode_str": per_str,
-                "lr": laba_rugi,
-            })
-            return _pdf_response(pdf_bytes, f"laba_rugi_{tgl_sampai}.pdf")
-
+            xlsx_bytes = build_laba_rugi(nama_perus, per_str_xlsx_range, laba_rugi)
+            return _xlsx_response(xlsx_bytes, f"laba_rugi_{tgl_sampai}.xlsx")
         elif tab == "ekuitas":
-            pdf_bytes = render_pdf("ekuitas.html", {
-                "landscape": False, "nama_perusahaan": nama_perus,
-                "judul": "Laporan Ekuitas Pemilik", "periode_str": per_str,
-                "ek": ekuitas,
-            })
-            return _pdf_response(pdf_bytes, f"ekuitas_{tgl_sampai}.pdf")
-
+            xlsx_bytes = build_ekuitas(nama_perus, per_str_xlsx_range, ekuitas)
+            return _xlsx_response(xlsx_bytes, f"ekuitas_{tgl_sampai}.xlsx")
         else:  # neraca
-            pdf_bytes = render_pdf("neraca.html", {
-                "landscape": False, "nama_perusahaan": nama_perus,
-                "judul": "Neraca", "periode_str": f"Per {_fmt_tgl(tgl_sampai)}",
-                "nr": neraca,
-            })
-            return _pdf_response(pdf_bytes, f"neraca_{tgl_sampai}.pdf")
+            xlsx_bytes = build_neraca(nama_perus, per_str_xlsx_point, neraca)
+            return _xlsx_response(xlsx_bytes, f"neraca_{tgl_sampai}.xlsx")
 
     return templates.TemplateResponse("laporan/keuangan.html", {
         "request": request,

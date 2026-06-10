@@ -3,22 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Cleaning Service Accounting{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=6">
+    <title>{% block title %}BalansiQ{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=11">
 </head>
 <body>
     <nav class="navbar">
         <div class="container" style="display:flex; justify-content:space-between; align-items:center;">
-            <a href="/" class="brand">Cleaning Service Accounting</a>
+            <a href="/" class="brand">BalansiQ</a>
+            {% set p = request.url.path %}
+            {% set is_pencatatan = p in ['/laporan/jurnal-umum', '/laporan/buku-besar', '/laporan/neraca-saldo'] %}
+            {% set is_penyesuaian = p in ['/laporan/jurnal-penyesuaian', '/laporan/worksheet'] or p.startswith('/penutup') %}
             <div class="nav-links">
-                <a href="/" class="{{ 'active' if request.url.path == '/' }}">Dashboard</a>
-                <a href="/transaksi" class="{{ 'active' if request.url.path.startswith('/transaksi') }}">Daftar Transaksi</a>
-                <a href="/laporan/jurnal-umum" class="{{ 'active' if request.url.path == '/laporan/jurnal-umum' }}">Jurnal Umum</a>
-                <a href="/laporan/buku-besar" class="{{ 'active' if request.url.path == '/laporan/buku-besar' }}">Buku Besar</a>
-                <a href="/laporan/neraca-saldo" class="{{ 'active' if request.url.path == '/laporan/neraca-saldo' }}">Neraca Saldo</a>
-                <a href="/laporan/worksheet" class="{{ 'active' if request.url.path == '/laporan/worksheet' }}">Kertas Kerja</a>
-                <a href="/laporan/keuangan" class="{{ 'active' if request.url.path == '/laporan/keuangan' }}">Laporan Keuangan</a>
-                <a href="/akun" class="{{ 'active' if request.url.path.startswith('/akun') }}">Daftar Akun</a>
+                <a href="/" class="{{ 'active' if p == '/' }}">Dashboard</a>
+                <a href="/transaksi" class="{{ 'active' if p.startswith('/transaksi') }}">Daftar Transaksi</a>
+
+                <div class="nav-dropdown {{ 'active' if is_pencatatan }}">
+                    <button type="button" class="nav-dropdown-toggle">
+                        Pencatatan <span class="nav-caret">▾</span>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="/laporan/jurnal-umum"  class="{{ 'active' if p == '/laporan/jurnal-umum' }}">Jurnal Umum</a>
+                        <a href="/laporan/buku-besar"   class="{{ 'active' if p == '/laporan/buku-besar' }}">Buku Besar</a>
+                        <a href="/laporan/neraca-saldo" class="{{ 'active' if p == '/laporan/neraca-saldo' }}">Neraca Saldo</a>
+                    </div>
+                </div>
+
+                <div class="nav-dropdown {{ 'active' if is_penyesuaian }}">
+                    <button type="button" class="nav-dropdown-toggle">
+                        Penyesuaian <span class="nav-caret">▾</span>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="/laporan/jurnal-penyesuaian" class="{{ 'active' if p == '/laporan/jurnal-penyesuaian' }}">Jurnal Penyesuaian</a>
+                        <a href="/laporan/worksheet"          class="{{ 'active' if p == '/laporan/worksheet' }}">Kertas Kerja</a>
+                        <a href="/penutup"                    class="{{ 'active' if p.startswith('/penutup') }}">Jurnal Penutup</a>
+                    </div>
+                </div>
+
+                <a href="/laporan/keuangan" class="{{ 'active' if p == '/laporan/keuangan' }}">Laporan Keuangan</a>
+
+                {% if request.session.get('is_admin') %}
+                {% set is_master = p.startswith('/akun') or p.startswith('/admin') %}
+                <div class="nav-dropdown {{ 'active' if is_master }}">
+                    <button type="button" class="nav-dropdown-toggle">
+                        Master <span class="nav-caret">▾</span>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="/akun" class="{{ 'active' if p.startswith('/akun') }}">Daftar Akun</a>
+                        <a href="/admin/users" class="{{ 'active' if p.startswith('/admin') }}">Manajemen User</a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# ── User info & logout ── #}
+                {% set _username = request.session.get('username') %}
+                {% if _username %}
+                <div class="nav-user">
+                    <span class="nav-user-name" title="Logged in as {{ _username }}">
+                        👤 {{ request.session.get('nama', _username) }}
+                    </span>
+                    <form method="post" action="/logout" style="display:inline;">
+                        <button type="submit" class="nav-logout-btn" title="Logout">⎋</button>
+                    </form>
+                </div>
+                {% endif %}
             </div>
         </div>
     </nav>

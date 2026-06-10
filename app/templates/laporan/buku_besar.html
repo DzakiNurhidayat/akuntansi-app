@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Buku Besar - Cleaning Service Accounting{% endblock %}
+{% block title %}Buku Besar - BalansiQ{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -9,11 +9,19 @@
             {{ tgl_dari.strftime('%d %b %Y') }} — {{ tgl_sampai.strftime('%d %b %Y') }}
         </p>
     </div>
-    <a href="/laporan/buku-besar?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
-       class="btn btn-secondary" target="_blank">
-        ↓ Download PDF
-    </a>
+    <div style="display:flex; gap:.5rem;">
+        <a href="/laporan/buku-besar?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
+           class="btn btn-secondary" target="_blank">↓ PDF</a>
+        <a href="/laporan/buku-besar?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=xlsx"
+           class="btn btn-secondary" target="_blank">↓ Excel</a>
+    </div>
 </div>
+
+{% set ws_prev_url = "/laporan/jurnal-umum?tgl_dari=" ~ tgl_dari ~ "&tgl_sampai=" ~ tgl_sampai %}
+{% set ws_prev_label = "Jurnal Umum" %}
+{% set ws_next_url = "/laporan/neraca-saldo?tgl_dari=" ~ tgl_dari ~ "&tgl_sampai=" ~ tgl_sampai %}
+{% set ws_next_label = "Neraca Saldo" %}
+{% include "_workflow_nav.html" %}
 
 {% set base_url = "/laporan/buku-besar" %}
 {% include "laporan/_filter_bar.html" %}

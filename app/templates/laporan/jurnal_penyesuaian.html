@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Jurnal Umum - BalansiQ{% endblock %}
+{% block title %}Jurnal Penyesuaian - BalansiQ{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Jurnal Umum</h1>
+        <h1>Jurnal Penyesuaian</h1>
         <p class="text-muted">
             {{ tgl_dari.strftime('%d %b %Y') }} — {{ tgl_sampai.strftime('%d %b %Y') }}
             &nbsp;·&nbsp; Halaman {{ page }} / {{ total_pages }}
@@ -12,18 +12,18 @@
         </p>
     </div>
     <div style="display:flex; gap:.5rem;">
-        <a href="/laporan/jurnal-umum?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
+        <a href="/laporan/jurnal-penyesuaian?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=pdf"
            class="btn btn-secondary" target="_blank">↓ PDF</a>
-        <a href="/laporan/jurnal-umum?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=xlsx"
+        <a href="/laporan/jurnal-penyesuaian?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&format=xlsx"
            class="btn btn-secondary" target="_blank">↓ Excel</a>
     </div>
 </div>
 
-{% set ws_next_url = "/laporan/buku-besar?tgl_dari=" ~ tgl_dari ~ "&tgl_sampai=" ~ tgl_sampai %}
-{% set ws_next_label = "Buku Besar" %}
+{% set ws_next_url = "/laporan/worksheet?tgl_dari=" ~ tgl_dari ~ "&tgl_sampai=" ~ tgl_sampai %}
+{% set ws_next_label = "Kertas Kerja" %}
 {% include "_workflow_nav.html" %}
 
-{% set base_url = "/laporan/jurnal-umum" %}
+{% set base_url = "/laporan/jurnal-penyesuaian" %}
 {% include "laporan/_filter_bar.html" %}
 
 <div class="card table-card">
@@ -34,7 +34,6 @@
                     <th style="width:80px;">Bulan, Tahun</th>
                     <th style="width:36px; text-align:center;">Tgl</th>
                     <th>Nama Akun</th>
-                    <th style="width:55px; text-align:center;">Ref</th>
                     <th style="width:155px; text-align:right;">Debet (Rp)</th>
                     <th style="width:155px; text-align:right;">Kredit (Rp)</th>
                 </tr>
@@ -51,9 +50,6 @@
                     <td style="padding-left: {% if row.entry.kredit > 0 %}2.5rem{% else %}1rem{% endif %};">
                         {{ row.entry.akun.nama_akun }}
                     </td>
-                    <td style="text-align:center; color:#7f8c8d; font-size:.8rem;">
-                        {{ row.entry.akun.kode_akun }}
-                    </td>
                     <td style="text-align:right; font-variant-numeric:tabular-nums;">
                         {% if row.entry.debet > 0 %}{{ row.entry.debet | rupiah }}{% endif %}
                     </td>
@@ -63,8 +59,8 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" style="text-align:center; padding:2.5rem; color:#7f8c8d;">
-                        Tidak ada transaksi pada periode ini.
+                    <td colspan="5" style="text-align:center; padding:2.5rem; color:#7f8c8d;">
+                        Tidak ada jurnal penyesuaian pada periode ini.
                     </td>
                 </tr>
                 {% endfor %}
@@ -72,7 +68,7 @@
             {% if rows %}
             <tfoot>
                 <tr class="totals-row">
-                    <td colspan="4" style="text-align:right; font-weight:600; padding:.75rem 1rem;">
+                    <td colspan="3" style="text-align:right; font-weight:600; padding:.75rem 1rem;">
                         Total halaman ini
                     </td>
                     <td style="text-align:right; font-weight:700;">{{ page_debet | rupiah }}</td>
@@ -87,7 +83,6 @@
 {# ── Pagination ── #}
 {% if total_pages > 1 %}
 <div class="pagination-bar">
-    {# Tombol Prev #}
     {% if page > 1 %}
     <a href="?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&page={{ page - 1 }}"
        class="btn btn-sm btn-secondary">← Prev</a>
@@ -95,7 +90,6 @@
     <span class="btn btn-sm btn-secondary disabled">← Prev</span>
     {% endif %}
 
-    {# Nomor halaman #}
     {% for p in range(1, total_pages + 1) %}
     <a href="?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&page={{ p }}"
        class="btn btn-sm {% if p == page %}btn-primary{% else %}btn-secondary{% endif %}">
@@ -103,7 +97,6 @@
     </a>
     {% endfor %}
 
-    {# Tombol Next #}
     {% if page < total_pages %}
     <a href="?tgl_dari={{ tgl_dari }}&tgl_sampai={{ tgl_sampai }}&page={{ page + 1 }}"
        class="btn btn-sm btn-secondary">Next →</a>
@@ -113,7 +106,6 @@
 </div>
 {% endif %}
 
-{# Total keseluruhan periode (lintas halaman) #}
 {% if total_pages > 1 and rows %}
 <div style="text-align:right; font-size:.85rem; color:#7f8c8d; margin-top:.5rem;">
     Total seluruh periode: <strong>{{ grand_total | rupiah }}</strong>

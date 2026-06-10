@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if transaksi %}Edit Transaksi #{{ transaksi.id }}{% else %}Input Transaksi{% endif %} - Cleaning Service Accounting{% endblock %}
+{% block title %}{% if transaksi %}Edit Transaksi #{{ transaksi.id }}{% else %}Input Transaksi{% endif %} - BalansiQ{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -16,6 +16,15 @@
 </div>
 {% endif %}
 
+{% if transaksi and transaksi.periode and transaksi.periode.is_closed %}
+<div class="alert" style="background:#fff4e6; color:#7a4a00; border:1px solid #ffd9a8;">
+    <strong>⚠ Periode ini sudah ditutup.</strong>
+    Mengedit transaksi akan menyebabkan jurnal penutup, saldo awal periode berikutnya, dan jurnal pembalik jadi <strong>tidak sinkron</strong>.
+    Setelah selesai edit, buka halaman <a href="/penutup?periode_id={{ transaksi.periode.id }}" style="color:#1a5276; font-weight:600;">Jurnal Penutup</a>
+    dan klik tombol <strong>↻ Resync Tutup Buku</strong>.
+</div>
+{% endif %}
+
 <form method="post"
       action="{% if transaksi %}/transaksi/{{ transaksi.id }}/edit{% else %}/transaksi/tambah{% endif %}"
       id="form-transaksi">
@@ -26,8 +35,19 @@
             <div class="form-group">
                 <label for="tanggal">Tanggal <span class="required">*</span></label>
                 <input type="date" id="tanggal" name="tanggal" class="form-control" required
-                       value="{{ (transaksi.tanggal.isoformat() if transaksi) or form_data.get('tanggal', tanggal_default) }}">
-                <small class="help-text">Periode ditentukan otomatis dari bulan tanggal ini</small>
+                       value="{{ (transaksi.tanggal.isoformat() if transaksi) or form_data.get('tanggal', tanggal_default) }}"
+                       {% if tanggal_min %}min="{{ tanggal_min }}"{% endif %}
+                       {% if tanggal_max %}max="{{ tanggal_max }}"{% endif %}>
+                <small class="help-text">
+                    {% if transaksi %}
+                        Tanggal harus tetap di periode asli: {{ tanggal_min }} – {{ tanggal_max }}
+                    {% elif latest_periode %}
+                        Periode aktif: <strong>{{ tanggal_min }} – {{ tanggal_max }}</strong>
+                        {% if periode_locked %}
+                        <span style="color:#c0392b;">— ⚠ Periode terkunci, buka dulu di Jurnal Penutup</span>
+                        {% endif %}
+                    {% endif %}
+                </small>
             </div>
 
             <div class="form-group">

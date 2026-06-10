@@ -1,25 +1,50 @@
+import os
 from decimal import Decimal
 
 from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db, engine, Base
-from app.models import Akun, Periode, Transaksi, JurnalEntry
+from app.middleware import AuthMiddleware
+from app.migrations import apply_migrations
+from app.models import Akun, Periode, Transaksi, JurnalEntry, SaldoAwal
 from app.templates_env import templates
+from app.routers import admin as admin_router
 from app.routers import akun as akun_router
+from app.routers import auth as auth_router
 from app.routers import transaksi as transaksi_router
 from app.routers import laporan as laporan_router
+from app.routers import penutup as penutup_router
 
-# Buat tabel saat app start (jika belum ada)
+# Apply migrasi schema lalu buat tabel baru (jika belum ada)
+apply_migrations(engine)
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Cleaning Service Accounting")
+app = FastAPI(title="BalansiQ — Sistem Informasi Akuntansi")
+
+# ── Middleware ──────────────────────────────────────────────────────────────
+# Session cookie ditandatangani dengan SECRET_KEY (env). Fallback dev-only key
+# tetap ada kalau env belum di-set, tapi WAJIB diubah saat deploy.
+_SECRET = os.getenv("SECRET_KEY", "dev-only-change-me-in-production-please-32chars")
+app.add_middleware(AuthMiddleware)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_SECRET,
+    session_cookie="csa_session",
+    max_age=60 * 60 * 8,   # 8 jam
+    same_site="lax",
+)
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.include_router(auth_router.router)
+app.include_router(admin_router.router)
 app.include_router(akun_router.router)
 app.include_router(transaksi_router.router)
 app.include_router(laporan_router.router)
+app.include_router(penutup_router.router)
 
 BULAN_NAMA = {
     1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
@@ -37,7 +62,16 @@ _EXCLUDE_KODE = {"313"}
 
 
 def _hitung_stats(db: Session, periode_id: int) -> dict:
+    """Hitung stats NSD (Neraca Saldo setelah Disesuaikan) per kelompok akun.
+
+    Basis: saldo_awal + Δ(umum + penyesuaian). Tidak menyertakan penutup &
+    pembalik supaya laba/rugi periode tetap terlihat meskipun periode sudah
+    ditutup (kalau pakai penutup, pendapatan/beban jadi 0).
+    """
     stats = {g: Decimal("0") for g in _GROUP_DIR}
+
+    # Δ dari transaksi umum + penyesuaian (basis NSD)
+    JENIS_NSD = ["umum", "penyesuaian"]
     for jenis, arah in _GROUP_DIR.items():
         row = (
             db.query(
@@ -48,15 +82,54 @@ def _hitung_stats(db: Session, periode_id: int) -> dict:
             .join(Akun, JurnalEntry.kode_akun == Akun.kode_akun)
             .filter(
                 Transaksi.periode_id == periode_id,
-                Transaksi.jenis == "umum",
+                Transaksi.jenis.in_(JENIS_NSD),
                 Akun.jenis_akun == jenis,
                 ~Akun.kode_akun.in_(_EXCLUDE_KODE),
             )
             .first()
         )
         d, k = Decimal(str(row.d)), Decimal(str(row.k))
-        stats[jenis] = (d - k) if arah == "debet" else (k - d)
+        stats[jenis] += (d - k) if arah == "debet" else (k - d)
+
+    # Tambah saldo_awal (carry-forward dari periode sebelumnya)
+    # Saldo awal disimpan SELALU positif di sisi normal, jadi langsung diakumulasi.
+    saldo_rows = (
+        db.query(SaldoAwal, Akun)
+        .join(Akun, SaldoAwal.kode_akun == Akun.kode_akun)
+        .filter(
+            SaldoAwal.periode_id == periode_id,
+            ~Akun.kode_akun.in_(_EXCLUDE_KODE),
+        )
+        .all()
+    )
+    for sa, akun in saldo_rows:
+        if akun.jenis_akun in stats:
+            stats[akun.jenis_akun] += Decimal(str(sa.saldo))
+
     return stats
+
+
+def _status_periode(db: Session, periode: Periode) -> tuple[str, str]:
+    """Return (label, slug) status fase periode dalam siklus akuntansi.
+
+    Logika:
+      • is_closed=True                    → 'Tutup Buku'    (penutupan selesai)
+      • Ada transaksi jenis='penyesuaian' → 'Penyesuaian'   (sudah AJP)
+      • Else                              → 'Pencatatan'    (masih input jurnal umum)
+    """
+    if periode.is_closed:
+        return "Tutup Buku", "tutup"
+    has_ajp = (
+        db.query(Transaksi.id)
+        .filter(
+            Transaksi.periode_id == periode.id,
+            Transaksi.jenis == "penyesuaian",
+        )
+        .first()
+    )
+    if has_ajp:
+        return "Penyesuaian", "penyesuaian"
+    return "Pencatatan", "pencatatan"
 
 
 @app.get("/")
@@ -78,6 +151,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     stats = _hitung_stats(db, aktif.id) if aktif else {g: Decimal("0") for g in _GROUP_DIR}
     laba_rugi = stats["pendapatan"] - stats["beban"]
 
+    # Status fase siklus akuntansi
+    status_label, status_slug = (
+        _status_periode(db, aktif) if aktif else ("Belum ada", "kosong")
+    )
+
     return templates.TemplateResponse("index.html", {
         "request": request,
         "periodes": periodes,
@@ -85,6 +163,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "bulan_nama": BULAN_NAMA,
         "stats": {k: float(v) for k, v in stats.items()},
         "laba_rugi": float(laba_rugi),
+        "status_label": status_label,
+        "status_slug": status_slug,
     })
 
 

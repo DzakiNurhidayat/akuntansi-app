@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Manajemen User - BalansiQ{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Manajemen User</h1>
+        <p class="text-muted">Kelola akun login & assignment Chart of Accounts</p>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('form-tambah').style.display='block'">
+        + Tambah User
+    </button>
+</div>
+
+{% if msg %}
+<div class="alert alert-{{ msg_type }}">{{ msg }}</div>
+{% endif %}
+
+{# ── Form tambah user (initially hidden) ── #}
+<div class="card" id="form-tambah" style="display:none; padding:1.5rem; margin-bottom:1.25rem;">
+    <h3 style="margin-bottom:1rem; font-size:1.05rem;">Tambah User Baru</h3>
+    <form method="post" action="/admin/users/tambah">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="new-username">Username</label>
+                <input type="text" id="new-username" name="username" class="form-control" required
+                       maxlength="50" placeholder="contoh: bendahara">
+            </div>
+            <div class="form-group">
+                <label for="new-nama">Nama Lengkap</label>
+                <input type="text" id="new-nama" name="nama" class="form-control" required
+                       maxlength="100" placeholder="contoh: Bendahara Utama">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="new-password">Password</label>
+                <input type="text" id="new-password" name="password" class="form-control" required
+                       placeholder="minimal 6 karakter">
+            </div>
+            <div class="form-group" style="display:flex; align-items:center; padding-top:1.5rem;">
+                <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer;">
+                    <input type="checkbox" name="is_admin" value="true">
+                    <span>Jadikan administrator</span>
+                </label>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Buat User</button>
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('form-tambah').style.display='none'">Batal</button>
+        </div>
+    </form>
+</div>
+
+<div class="card table-card">
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width:50px">#</th>
+                    <th style="width:130px">Username</th>
+                    <th>Nama</th>
+                    <th style="width:90px; text-align:center;">Role</th>
+                    <th style="width:90px; text-align:center;">Status</th>
+                    <th style="width:90px; text-align:center;">Akun</th>
+                    <th style="width:200px;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td class="text-muted">{{ u.id }}</td>
+                    <td><code>{{ u.username }}</code></td>
+                    <td>{{ u.nama }}</td>
+                    <td class="text-center">
+                        {% if u.is_admin %}
+                        <span class="badge badge-active">👑 Admin</span>
+                        {% else %}
+                        <span class="badge badge-saldo-debet">Regular</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if u.is_active %}
+                        <span class="badge badge-active">Aktif</span>
+                        {% else %}
+                        <span class="badge badge-inactive">Nonaktif</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center" style="font-variant-numeric:tabular-nums;">
+                        {% if u.is_admin %}
+                        <span class="text-muted" title="Admin punya akses semua akun">∞</span>
+                        {% else %}
+                        {{ assigned_count.get(u.id, 0) }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex; flex-wrap:wrap; gap:.3rem;">
+                            <a href="/admin/users/{{ u.id }}/akun"
+                               class="btn btn-sm btn-secondary"
+                               title="Atur akun yang bisa user pakai">📋 Akun</a>
+
+                            <form method="post" action="/admin/users/{{ u.id }}/toggle-active"
+                                  onsubmit="return confirm('{{ 'Nonaktifkan' if u.is_active else 'Aktifkan' }} {{ u.username }}?')">
+                                <button type="submit"
+                                        class="btn btn-sm {{ 'btn-danger' if u.is_active else 'btn-secondary' }}">
+                                    {{ 'Nonaktifkan' if u.is_active else 'Aktifkan' }}
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div style="margin-top:1.5rem; padding:.75rem 1rem; background:#f8f9fa; border-radius:6px; font-size:.85rem; color:#5a6772;">
+    <strong>Catatan:</strong>
+    <ul style="margin:.5rem 0 0 1.2rem; padding:0;">
+        <li>👑 <strong>Admin</strong> punya akses penuh: manajemen user, master akun, dan SEMUA akun di form input transaksi.</li>
+        <li>Untuk user <strong>regular</strong>, jumlah akun yang dia bisa pakai = akun yang di-assign + akun universal (✦).</li>
+        <li>Role admin/regular & password diatur saat <strong>Buat User</strong> dan tidak bisa diubah dari sini (untuk konsistensi). Kalau perlu reset, edit langsung di DB atau hapus + buat ulang.</li>
+        <li>Admin tidak bisa nonaktifkan akun sendiri (cegah lock-out).</li>
+    </ul>
+</div>
+{% endblock %}

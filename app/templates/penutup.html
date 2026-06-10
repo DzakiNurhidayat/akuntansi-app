@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Jurnal Penutup - BalansiQ{% endblock %}
+
+{% block content %}
+{% set BULAN_NAMA = {1:"Januari",2:"Februari",3:"Maret",4:"April",5:"Mei",6:"Juni",
+                    7:"Juli",8:"Agustus",9:"September",10:"Oktober",11:"November",12:"Desember"} %}
+
+<div class="page-header">
+    <div>
+        <h1>Jurnal Penutup</h1>
+        <p class="text-muted">
+            Otomatis dari saldo akun nominal (NSD = Jurnal Umum + Penyesuaian)
+        </p>
+    </div>
+    {% if periode %}
+    <form method="get" action="/penutup" style="display:flex; align-items:center; gap:.5rem;">
+        <label style="font-size:.875rem; font-weight:500; white-space:nowrap;">Periode:</label>
+        <select name="periode_id" class="form-control" style="width:auto; min-width:180px;"
+                onchange="this.form.submit()">
+            {% for p in periodes %}
+            <option value="{{ p.id }}" {% if periode.id == p.id %}selected{% endif %}>
+                {{ BULAN_NAMA[p.bulan] }} {{ p.tahun }} — {{ p.nama_perusahaan }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
+</div>
+
+{% set ws_prev_url = "/laporan/worksheet" %}
+{% set ws_prev_label = "Kertas Kerja" %}
+{% include "_workflow_nav.html" %}
+
+{% if msg %}
+<div class="alert alert-{{ 'error' if msg_type == 'error' else 'success' }}">{{ msg }}</div>
+{% endif %}
+
+{% if not periode %}
+<div class="alert alert-error">Belum ada periode aktif.</div>
+{% else %}
+
+{# ── Info & tombol aksi ──────────────────────────────────────────────── #}
+<div class="card" style="padding:1.25rem 1.5rem; margin-bottom:1.25rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom: {{ '1rem' if is_closed else '0' }};">
+        <div>
+            <p style="font-size:.78rem; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#7f8c8d; margin-bottom:.3rem;">
+                Status Periode
+            </p>
+            {% if is_closed %}
+            <p style="font-size:.95rem; color:#922b21; font-weight:600;">
+                🔒 PERIODE TERKUNCI — Transaksi tidak dapat diedit/dihapus
+            </p>
+            {% elif has_saved %}
+            <p style="font-size:.95rem; color:#1e8449; font-weight:500;">
+                ✓ Sudah ada {{ saved | length }} transaksi penutup tersimpan (belum tutup periode)
+            </p>
+            {% else %}
+            <p style="font-size:.95rem; color:#7f8c8d;">
+                Belum ada transaksi penutup untuk periode ini
+            </p>
+            {% endif %}
+        </div>
+        <div style="display:flex; gap:.6rem; flex-wrap:wrap;">
+            {% if not is_closed %}
+            <form method="post" action="/penutup/generate?periode_id={{ periode.id }}"
+                  onsubmit="return confirm('{{ 'Regenerate' if has_saved else 'Generate' }} jurnal penutup untuk periode ini?');">
+                <button type="submit" class="btn btn-primary">
+                    {% if has_saved %}↻ Regenerate{% else %}+ Generate{% endif %} Jurnal Penutup
+                </button>
+            </form>
+            {% if has_saved %}
+            <form method="post" action="/penutup/tutup-periode?periode_id={{ periode.id }}"
+                  onsubmit="return confirm('Tutup periode {{ periode.bulan }}/{{ periode.tahun }} secara permanen?\n\nIni akan:\n• Mengunci semua transaksi periode ini\n• Membawa saldo akun aset, kewajiban, dan modal ke periode berikutnya\n• Otomatis membuat jurnal pembalik untuk AJP akrual di periode baru\n\nPeriode masih bisa dibuka kembali selama periode berikutnya kosong.');">
+                <button type="submit" class="btn btn-primary" style="background:#922b21;">
+                    🔒 Tutup Periode & Buka Periode Baru
+                </button>
+            </form>
+            <form method="post" action="/penutup/hapus?periode_id={{ periode.id }}"
+                  onsubmit="return confirm('Hapus semua transaksi penutup periode ini?');">
+                <button type="submit" class="btn btn-secondary">🗑 Hapus Penutup</button>
+            </form>
+            {% endif %}
+            {% else %}
+            <form method="post" action="/penutup/resync?periode_id={{ periode.id }}"
+                  onsubmit="return confirm('Resync Tutup Buku?\n\nIni akan:\n• Hapus jurnal penutup lama, generate ulang dari NSD saat ini\n• Re-snapshot saldo awal periode berikutnya\n• Regenerate jurnal pembalik di periode berikutnya\n\nPakai setelah edit transaksi umum/penyesuaian di periode ini.');">
+                <button type="submit" class="btn btn-primary" style="background:#16a085;">
+                    ↻ Resync Tutup Buku
+                </button>
+            </form>
+            <form method="post" action="/penutup/buka-periode?periode_id={{ periode.id }}"
+                  onsubmit="return confirm('Buka kembali periode {{ periode.bulan }}/{{ periode.tahun }}?\n\nIni akan menghapus saldo awal & pembalik di periode berikutnya, lalu set is_closed=False.\n\nGagal jika periode berikutnya sudah punya transaksi umum/penyesuaian/penutup.');">
+                <button type="submit" class="btn btn-secondary">🔓 Buka Periode</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if is_closed %}
+    <div style="padding-top:1rem; border-top:1px solid #eee; font-size:.85rem; color:#5a6772;">
+        <strong>Catatan:</strong> Periode tertutup tetap bisa diedit transaksinya — tapi setelah edit, klik <strong>↻ Resync Tutup Buku</strong> agar jurnal penutup + saldo awal periode berikutnya + jurnal pembalik tetap sinkron dengan data terbaru.
+        {% if next_periode %}<br>Periode berikutnya:
+        <a href="/penutup?periode_id={{ next_periode.id }}" style="font-weight:600;">
+            {{ next_periode.bulan }}/{{ next_periode.tahun }} →
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{# ── Preview / Tersimpan ─────────────────────────────────────────────── #}
+{% set data = saved if has_saved else preview %}
+{% set is_preview = not has_saved %}
+
+{% if not data %}
+<div class="card" style="text-align:center; padding:2.5rem;">
+    <p class="text-muted">
+        Tidak ada saldo akun nominal yang perlu ditutup pada periode ini.
+        <br>Pastikan jurnal umum & penyesuaian sudah diinput.
+    </p>
+</div>
+{% else %}
+
+{% if is_preview %}
+<p style="font-size:.85rem; color:#7f8c8d; margin-bottom:.75rem;">
+    <strong>Preview</strong> — transaksi belum disimpan. Klik tombol Generate di atas untuk menyimpan.
+</p>
+{% endif %}
+
+<div class="card table-card">
+    <div class="table-wrapper">
+        <table class="table jurnal-table">
+            <thead>
+                <tr>
+                    <th style="width:90px;">Tanggal</th>
+                    <th>Nama Akun</th>
+                    <th style="width:60px; text-align:center;">Ref</th>
+                    <th style="width:160px; text-align:right;">Debet (Rp)</th>
+                    <th style="width:160px; text-align:right;">Kredit (Rp)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trx in data %}
+                {# Header baris keterangan transaksi #}
+                <tr style="background:#f8f9fa;">
+                    <td colspan="5" style="font-weight:600; color:#2c3e50; padding:.6rem 1rem;">
+                        {{ loop.index }}. {{ trx.keterangan }}
+                    </td>
+                </tr>
+                {% for e in trx.entries %}
+                <tr>
+                    <td style="vertical-align:top; color:#7f8c8d;">
+                        {% if loop.first %}{{ trx.tanggal.strftime('%d/%m/%Y') }}{% endif %}
+                    </td>
+                    <td style="padding-left: {% if e.kredit > 0 %}2.5rem{% else %}1rem{% endif %};">
+                        {{ e.akun.nama_akun }}
+                    </td>
+                    <td style="text-align:center; color:#7f8c8d; font-size:.8rem;">
+                        {{ e.kode_akun }}
+                    </td>
+                    <td style="text-align:right; font-variant-numeric:tabular-nums;">
+                        {% if e.debet and e.debet > 0 %}{{ e.debet | rupiah }}{% endif %}
+                    </td>
+                    <td style="text-align:right; font-variant-numeric:tabular-nums;">
+                        {% if e.kredit and e.kredit > 0 %}{{ e.kredit | rupiah }}{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Daftar Transaksi - Cleaning Service Accounting{% endblock %}
+{% block title %}Daftar Transaksi - BalansiQ{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -14,15 +14,38 @@
 <div class="alert alert-{{ msg_type }}">{{ msg }}</div>
 {% endif %}
 
-<div class="filter-bar">
-    <span class="text-muted" style="font-size:0.875rem;">Filter jenis:</span>
-    <a href="/transaksi" class="btn btn-sm {% if not jenis_filter %}btn-primary{% else %}btn-secondary{% endif %}">Semua</a>
-    {% for j in jenis_input %}
-    <a href="/transaksi?jenis={{ j }}"
-       class="btn btn-sm {% if jenis_filter == j %}btn-primary{% else %}btn-secondary{% endif %}">
-        {{ jenis_label[j] }}
-    </a>
-    {% endfor %}
+<div class="filter-bar" style="flex-wrap:wrap; gap:.5rem;">
+    {# Filter jenis #}
+    <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;">
+        <span class="text-muted" style="font-size:0.875rem;">Jenis:</span>
+        <a href="/transaksi{% if periode_filter %}?periode_id={{ periode_filter }}{% endif %}"
+           class="btn btn-sm {% if not jenis_filter %}btn-primary{% else %}btn-secondary{% endif %}">Semua</a>
+        {% for j in jenis_input %}
+        <a href="/transaksi?jenis={{ j }}{% if periode_filter %}&periode_id={{ periode_filter }}{% endif %}"
+           class="btn btn-sm {% if jenis_filter == j %}btn-primary{% else %}btn-secondary{% endif %}">
+            {{ jenis_label[j] }}
+        </a>
+        {% endfor %}
+    </div>
+
+    {# Filter periode #}
+    {% if periodes %}
+    <div style="display:flex; align-items:center; gap:.4rem; margin-left:auto;">
+        <span class="text-muted" style="font-size:0.875rem;">Periode:</span>
+        <form method="get" action="/transaksi" style="display:inline-flex; gap:.4rem; align-items:center;">
+            {% if jenis_filter %}<input type="hidden" name="jenis" value="{{ jenis_filter }}">{% endif %}
+            <select name="periode_id" class="form-control" style="width:auto; min-width:170px; padding:.35rem .6rem; font-size:.85rem;"
+                    onchange="this.form.submit()">
+                <option value="0" {% if not periode_filter %}selected{% endif %}>Semua Periode</option>
+                {% for p in periodes %}
+                <option value="{{ p.id }}" {% if periode_filter == p.id %}selected{% endif %}>
+                    {{ bulan_nama[p.bulan] }} {{ p.tahun }}{% if p.is_closed %} 🔒{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    {% endif %}
 </div>
 
 <div class="card table-card">
@@ -60,11 +83,18 @@
                     </td>
                     <td>
                         <div class="action-btns">
-                            <a href="/transaksi/{{ t.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                            {% set closed = t.periode and t.periode.is_closed %}
+                            <a href="/transaksi/{{ t.id }}/edit"
+                               class="btn btn-sm btn-secondary"
+                               {% if closed %}title="Periode sudah ditutup — perubahan butuh Resync di Jurnal Penutup"{% endif %}>
+                                Edit{% if closed %} ⚠{% endif %}
+                            </a>
                             {% if t.jenis not in ('penutup', 'pembalik') %}
                             <form method="post" action="/transaksi/{{ t.id }}/hapus"
-                                  onsubmit="return confirm('Hapus transaksi #{{ t.id }} tanggal {{ t.tanggal }}?')">
-                                <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                                  onsubmit="return confirm('Hapus transaksi #{{ t.id }} tanggal {{ t.tanggal }}?{% if closed %}\n\nPERHATIAN: periode sudah ditutup. Setelah hapus, klik &quot;Resync Tutup Buku&quot; di halaman Jurnal Penutup.{% endif %}')">
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    Hapus{% if closed %} ⚠{% endif %}
+                                </button>
                             </form>
                             {% endif %}
                         </div>

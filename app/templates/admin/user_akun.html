@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Assign Akun: {{ user_target.username }} - BalansiQ{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Assign Akun untuk {{ user_target.nama }}</h1>
+        <p class="text-muted">
+            Username: <code>{{ user_target.username }}</code>
+            {% if user_target.is_admin %}
+                · <span class="badge badge-active">👑 Admin</span>
+                <em style="color:#7f8c8d;">— admin punya akses penuh otomatis, assignment opsional</em>
+            {% endif %}
+        </p>
+    </div>
+    <a href="/admin/users" class="btn btn-secondary">← Kembali</a>
+</div>
+
+{% if msg %}
+<div class="alert alert-{{ msg_type }}">{{ msg }}</div>
+{% endif %}
+
+<form method="post" action="/admin/users/{{ user_target.id }}/akun">
+    <div style="display:flex; gap:.6rem; margin-bottom:1rem; flex-wrap:wrap;">
+        <button type="submit" class="btn btn-primary">💾 Simpan Assignment</button>
+        <button type="button" class="btn btn-secondary" onclick="checkAll(true)">Pilih Semua</button>
+        <button type="button" class="btn btn-secondary" onclick="checkAll(false)">Kosongkan</button>
+        <span style="margin-left:auto; font-size:.85rem; color:#7f8c8d;">
+            ✦ = universal (tidak butuh assign, semua user bisa pakai)
+        </span>
+    </div>
+
+    {% for jenis in jenis_choices %}
+        {% set kelompok = akun_list | selectattr("jenis_akun", "equalto", jenis) | list %}
+        {% if kelompok %}
+        <div class="card table-card">
+            <div class="table-group-header">
+                <span class="badge badge-{{ jenis }}">{{ jenis_label[jenis] }}</span>
+                <span class="text-muted">{{ kelompok | length }} akun</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width:55px; text-align:center;">Pilih</th>
+                            <th style="width:75px">Kode</th>
+                            <th>Nama Akun</th>
+                            <th style="width:85px; text-align:center;">Saldo Normal</th>
+                            <th style="width:100px; text-align:center;">Universal</th>
+                            <th style="width:90px; text-align:center;">Toggle ✦</th>
+                            <th style="width:80px; text-align:center;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for akun in kelompok %}
+                        <tr class="{% if not akun.is_active %}row-inactive{% endif %}">
+                            {# ── Pilih (assignment) ── #}
+                            <td class="text-center">
+                                {% if akun.is_universal %}
+                                    <input type="checkbox" checked disabled
+                                           title="Universal — semua user otomatis dapat akses">
+                                {% else %}
+                                    <input type="checkbox" name="akun" value="{{ akun.kode_akun }}"
+                                           class="akun-cb"
+                                           {% if akun.kode_akun in assigned %}checked{% endif %}>
+                                {% endif %}
+                            </td>
+
+                            {# ── Kode ── #}
+                            <td><code>{{ akun.kode_akun }}</code></td>
+
+                            {# ── Nama Akun ── #}
+                            <td>
+                                {{ akun.nama_akun }}
+                                {% if akun.nama_akun_en %}
+                                <span class="text-muted" style="font-size:.78rem;">({{ akun.nama_akun_en }})</span>
+                                {% endif %}
+                            </td>
+
+                            {# ── Saldo Normal ── #}
+                            <td class="text-center">
+                                <span class="badge badge-saldo-{{ akun.saldo_normal }}">{{ akun.saldo_normal | capitalize }}</span>
+                            </td>
+
+                            {# ── Universal (status badge, read-only) ── #}
+                            <td class="text-center">
+                                {% if akun.is_universal %}
+                                <span class="badge badge-active" title="Akun ini bisa dipakai semua user">✦ Universal</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+
+                            {# ── Toggle Universal (kolom terpisah) ── #}
+                            <td class="text-center">
+                                <form method="post" action="/admin/akun/{{ akun.kode_akun }}/toggle-universal"
+                                      onsubmit="return confirm('{{ 'Cabut' if akun.is_universal else 'Jadikan' }} universal untuk akun {{ akun.kode_akun }} {{ akun.nama_akun }}?')">
+                                    <button type="submit"
+                                            class="btn btn-sm {{ 'btn-danger' if akun.is_universal else 'btn-secondary' }}"
+                                            title="Klik untuk toggle universal">
+                                        {{ 'Cabut' if akun.is_universal else 'Set' }}
+                                    </button>
+                                </form>
+                            </td>
+
+                            {# ── Status aktif/nonaktif ── #}
+                            <td class="text-center">
+                                {% if akun.is_active %}
+                                <span class="badge badge-active">Aktif</span>
+                                {% else %}
+                                <span class="badge badge-inactive">Nonaktif</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+
+    <div style="margin:1.25rem 0; display:flex; gap:.6rem; flex-wrap:wrap;">
+        <button type="submit" class="btn btn-primary">💾 Simpan Assignment</button>
+        <a href="/admin/users" class="btn btn-secondary">Batal</a>
+    </div>
+</form>
+
+<div style="margin-top:1rem; padding:.75rem 1rem; background:#f8f9fa; border-radius:6px; font-size:.85rem; color:#5a6772;">
+    <strong>Cara kerja:</strong>
+    <ul style="margin:.5rem 0 0 1.2rem; padding:0;">
+        <li>Kolom <strong>Pilih</strong> — centang akun yang user ini bertanggung jawab. Saat dia input transaksi, dropdown akun hanya menampilkan akun yang di-centang + akun universal (✦).</li>
+        <li>Kolom <strong>Universal</strong> — status (read-only) menunjukkan apakah akun bisa dipakai semua user.</li>
+        <li>Kolom <strong>Toggle ✦</strong> — tombol untuk mark/unmark akun jadi universal. Biasanya hanya Kas yang universal karena jadi counterpart hampir semua transaksi.</li>
+        <li>Server akan tolak transaksi yang melibatkan akun di luar scope user.</li>
+    </ul>
+</div>
+
+<script>
+function checkAll(state) {
+    document.querySelectorAll('input.akun-cb').forEach(cb => cb.checked = state);
+}
+</script>
+{% endblock %}

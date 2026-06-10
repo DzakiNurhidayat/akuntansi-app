@@ -1,0 +1,35 @@
+{% extends "_base.html" %}
+{% block content %}
+<table>
+    <thead>
+        <tr>
+            <th style="width:8%">Tgl</th>
+            <th style="width:46%">Nama Akun / Keterangan</th>
+            <th style="width:23%">Debet</th>
+            <th style="width:23%">Kredit</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td style="vertical-align:top;">{{ row.tanggal }}</td>
+            <td class="{{ 'indent' if row.is_kredit }}">
+                {{ row.akun }}
+                {% if row.keterangan %}
+                <span style="display:block; font-size:7.5pt; color:#555;">{{ row.keterangan }}</span>
+                {% endif %}
+            </td>
+            <td class="num">{% if row.debet > 0 %}{{ row.debet | rupiah }}{% endif %}</td>
+            <td class="num">{% if row.kredit > 0 %}{{ row.kredit | rupiah }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="total-row">
+            <td colspan="2" class="bold">Total</td>
+            <td class="num">{{ grand_total | rupiah }}</td>
+            <td class="num">{{ grand_total | rupiah }}</td>
+        </tr>
+    </tfoot>
+</table>
+{% endblock %}
