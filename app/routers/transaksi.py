@@ -62,9 +62,15 @@ def _akun_json(db: Session, request: Request):
 
     allowed = allowed_akun_kode(db, user) if user else set()
 
+    from sqlalchemy.orm import joinedload
     akun_list = (
         db.query(Akun)
-        .filter(Akun.is_active == True, Akun.kode_akun.in_(allowed) if allowed else False)
+        .options(joinedload(Akun.parent))  # eager-load parent supaya tidak N+1
+        .filter(
+            Akun.is_active == True,
+            Akun.is_kategori == False,                        # kategori tidak boleh dipakai di transaksi
+            Akun.kode_akun.in_(allowed) if allowed else False,
+        )
         .order_by(Akun.kode_akun)
         .all()
     )
@@ -74,6 +80,8 @@ def _akun_json(db: Session, request: Request):
             "nama_akun": a.nama_akun,
             "jenis_akun": a.jenis_akun,
             "is_universal": bool(a.is_universal),
+            "parent_kode": a.parent_kode,
+            "parent_nama": a.parent.nama_akun if a.parent else None,
         }
         for a in akun_list
     ]

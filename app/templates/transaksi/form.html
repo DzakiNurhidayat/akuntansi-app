@@ -17,11 +17,10 @@
 {% endif %}
 
 {% if transaksi and transaksi.periode and transaksi.periode.is_closed %}
-<div class="alert" style="background:#fff4e6; color:#7a4a00; border:1px solid #ffd9a8;">
-    <strong>⚠ Periode ini sudah ditutup.</strong>
-    Mengedit transaksi akan menyebabkan jurnal penutup, saldo awal periode berikutnya, dan jurnal pembalik jadi <strong>tidak sinkron</strong>.
-    Setelah selesai edit, buka halaman <a href="/penutup?periode_id={{ transaksi.periode.id }}" style="color:#1a5276; font-weight:600;">Jurnal Penutup</a>
-    dan klik tombol <strong>↻ Resync Tutup Buku</strong>.
+<div class="alert alert-warning">
+    Periode ini sudah ditutup. Setelah edit, buka
+    <a href="/penutup?periode_id={{ transaksi.periode.id }}"><strong>Jurnal Penutup</strong></a>
+    lalu klik <strong>Resync Tutup Buku</strong> agar saldo awal periode berikutnya tetap sinkron.
 </div>
 {% endif %}
 
@@ -165,8 +164,10 @@ function createAkunSearch(kode) {
         const lq = q.toLowerCase();
         return akunData.filter(a =>
             a.kode_akun.toLowerCase().includes(lq) ||
-            a.nama_akun.toLowerCase().includes(lq)
-        ).slice(0, 10);
+            a.nama_akun.toLowerCase().includes(lq) ||
+            (a.parent_nama && a.parent_nama.toLowerCase().includes(lq)) ||  // search by parent kategori
+            (a.parent_kode && a.parent_kode.toLowerCase().includes(lq))
+        ).slice(0, 15);
     }
 
     function renderDropdown(matches) {
@@ -176,9 +177,13 @@ function createAkunSearch(kode) {
             const opt = document.createElement('div');
             opt.className = 'akun-option';
             opt.dataset.kode = a.kode_akun;
+            const parentLabel = a.parent_nama
+                ? `<span class="akun-opt-parent" title="Parent kategori">📁 ${a.parent_nama}</span>`
+                : '';
             opt.innerHTML =
                 `<code class="akun-opt-kode">${a.kode_akun}</code>` +
                 `<span class="akun-opt-nama">${a.nama_akun}</span>` +
+                parentLabel +
                 `<span class="badge badge-${a.jenis_akun} akun-opt-jenis">${a.jenis_akun}</span>`;
             opt.addEventListener('mousedown', e => {
                 e.preventDefault();

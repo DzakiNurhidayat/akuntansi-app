@@ -5,79 +5,209 @@
 <div class="page-header">
     <div>
         <h1>Daftar Akun</h1>
-        <p class="text-muted">Chart of Accounts perusahaan jasa cleaning service</p>
+        <p class="text-muted">Chart of Accounts &mdash; kelola jenis akun, kategori, dan akun detail</p>
     </div>
-    <a href="/akun/tambah" class="btn btn-primary">+ Tambah Akun</a>
+    <a href="/akun/tambah" class="btn btn-primary">+ Tambah Akun / Kategori</a>
 </div>
 
 {% if msg %}
 <div class="alert alert-{{ msg_type }}">{{ msg }}</div>
 {% endif %}
 
-{% set jenis_label = {
-    'aset': 'Aset',
-    'kewajiban': 'Kewajiban',
-    'modal': 'Modal',
-    'pendapatan': 'Pendapatan',
-    'beban': 'Beban'
-} %}
+{# ════════════════════════════════════════════════════════════
+   SECTION 1: JENIS AKUN
+══════════════════════════════════════════════════════════════ #}
+<div class="card table-card" style="margin-bottom:1.5rem;">
+    <div class="table-group-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <strong>Jenis Akun</strong>
+            <span class="text-muted" style="margin-left:.5rem;">{{ jenis_list | length }} jenis</span>
+        </div>
+        <button type="button" class="btn btn-sm btn-secondary"
+                onclick="document.getElementById('form-jenis').style.display='block'">
+            + Tambah Jenis
+        </button>
+    </div>
 
-{% for jenis in jenis_choices %}
-    {% set kelompok = akun_list | selectattr("jenis_akun", "equalto", jenis) | list %}
-    {% if kelompok %}
-    <div class="card table-card">
+    {# Form tambah jenis (hidden by default) #}
+    <div id="form-jenis" style="display:none; padding:1rem 1.25rem; border-bottom:1px solid #eee; background:#f8f9fa;">
+        <form method="post" action="/akun/jenis/tambah" style="display:flex; gap:.6rem; align-items:end; flex-wrap:wrap;">
+            <div class="form-group" style="flex:0 0 120px;">
+                <label style="font-size:.8rem;">Kode</label>
+                <input type="text" name="kode" required maxlength="20" placeholder="cth: investasi" class="form-control" style="padding:.35rem .6rem;">
+            </div>
+            <div class="form-group" style="flex:1 1 180px;">
+                <label style="font-size:.8rem;">Nama Tampilan</label>
+                <input type="text" name="nama" required maxlength="50" placeholder="cth: Investasi" class="form-control" style="padding:.35rem .6rem;">
+            </div>
+            <div class="form-group" style="flex:0 0 140px;">
+                <label style="font-size:.8rem;">Saldo Normal</label>
+                <select name="saldo_normal_default" required class="form-control" style="padding:.35rem .6rem;">
+                    <option value="debet">Debet</option>
+                    <option value="kredit">Kredit</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex:0 0 90px;">
+                <label style="font-size:.8rem;">Urutan</label>
+                <input type="number" name="urutan" value="10" min="0" class="form-control" style="padding:.35rem .6rem;">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Simpan</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('form-jenis').style.display='none'">Batal</button>
+        </form>
+    </div>
+
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width:120px">Kode</th>
+                    <th>Nama Tampilan</th>
+                    <th style="width:130px; text-align:center;">Saldo Normal</th>
+                    <th style="width:80px; text-align:center;">Urutan</th>
+                    <th style="width:90px; text-align:center;">Status</th>
+                    <th style="width:120px;">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for j in jenis_list %}
+                <tr>
+                    <td><code>{{ j.kode }}</code></td>
+                    <td>{{ j.nama }}</td>
+                    <td class="text-center">
+                        <span class="badge badge-saldo-{{ j.saldo_normal_default }}">{{ j.saldo_normal_default | capitalize }}</span>
+                    </td>
+                    <td class="text-center text-muted">{{ j.urutan }}</td>
+                    <td class="text-center">
+                        {% if j.is_active %}
+                        <span class="badge badge-active">Aktif</span>
+                        {% else %}
+                        <span class="badge badge-inactive">Nonaktif</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="/akun/jenis/{{ j.id }}/hapus"
+                              style="display:inline;"
+                              onsubmit="return confirm('Hapus jenis {{ j.kode }}? Hanya bisa kalau belum dipakai akun.')">
+                            <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted" style="padding:1.5rem;">Belum ada jenis akun.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ════════════════════════════════════════════════════════════
+   SECTION 2: AKUN (KATEGORI + DETAIL) — TREE VIEW
+══════════════════════════════════════════════════════════════ #}
+{% for j in jenis_list %}
+    {% set akun_dalam_jenis = akun_list | selectattr("jenis_akun", "equalto", j.kode) | list %}
+    {% if akun_dalam_jenis %}
+    <div class="card table-card" style="margin-bottom:1rem;">
         <div class="table-group-header">
-            <span class="badge badge-{{ jenis }}">{{ jenis_label[jenis] }}</span>
-            <span class="text-muted">{{ kelompok | length }} akun</span>
+            <span class="badge badge-{{ j.kode }}">{{ j.nama }}</span>
+            <span class="text-muted" style="margin-left:.5rem;">{{ akun_dalam_jenis | length }} akun</span>
         </div>
         <div class="table-wrapper">
             <table class="table">
                 <thead>
                     <tr>
-                        <th style="width:90px">Kode</th>
+                        <th style="width:120px">Kode</th>
                         <th>Nama Akun</th>
                         <th>Nama (EN)</th>
-                        <th style="width:90px">Saldo Normal</th>
-                        <th style="width:70px">Kontra</th>
-                        <th style="width:80px">Status</th>
+                        <th style="width:90px; text-align:center;">Saldo Normal</th>
+                        <th style="width:70px; text-align:center;">Kontra</th>
+                        <th style="width:90px; text-align:center;">Tipe</th>
+                        <th style="width:80px; text-align:center;">Status</th>
                         <th style="width:130px">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for akun in kelompok %}
-                    <tr class="{% if not akun.is_active %}row-inactive{% endif %}">
-                        <td><code>{{ akun.kode_akun }}</code></td>
-                        <td>{{ akun.nama_akun }}</td>
-                        <td class="text-muted">{{ akun.nama_akun_en or '-' }}</td>
-                        <td>
-                            <span class="badge badge-saldo-{{ akun.saldo_normal }}">
-                                {{ akun.saldo_normal | capitalize }}
-                            </span>
+                    {# Tampilkan kategori dulu (parent_kode=None & is_kategori), lalu akun detail di-indent #}
+                    {% set kategori_list = akun_dalam_jenis | selectattr("is_kategori") | list %}
+
+                    {# Akun TANPA parent dan BUKAN kategori (orphan) #}
+                    {% for a in akun_dalam_jenis if not a.is_kategori and not a.parent_kode %}
+                    <tr class="{% if not a.is_active %}row-inactive{% endif %}">
+                        <td><code>{{ a.kode_akun }}</code></td>
+                        <td>{{ a.nama_akun }}</td>
+                        <td class="text-muted">{{ a.nama_akun_en or '-' }}</td>
+                        <td class="text-center">
+                            <span class="badge badge-saldo-{{ a.saldo_normal }}">{{ a.saldo_normal | capitalize }}</span>
                         </td>
                         <td class="text-center">
-                            {% if akun.is_kontra %}
-                            <span class="badge badge-kontra">Ya</span>
-                            {% else %}
-                            <span class="text-muted">-</span>
-                            {% endif %}
+                            {% if a.is_kontra %}<span class="badge badge-kontra">Ya</span>{% else %}<span class="text-muted">-</span>{% endif %}
                         </td>
-                        <td>
-                            {% if akun.is_active %}
-                            <span class="badge badge-active">Aktif</span>
-                            {% else %}
-                            <span class="badge badge-inactive">Nonaktif</span>
-                            {% endif %}
+                        <td class="text-center">
+                            <span class="text-muted" style="font-size:.78rem;">Detail</span>
+                        </td>
+                        <td class="text-center">
+                            {% if a.is_active %}<span class="badge badge-active">Aktif</span>{% else %}<span class="badge badge-inactive">Nonaktif</span>{% endif %}
                         </td>
                         <td>
                             <div class="action-btns">
-                                <a href="/akun/{{ akun.kode_akun }}/edit" class="btn btn-sm btn-secondary">Edit</a>
-                                <form method="post" action="/akun/{{ akun.kode_akun }}/hapus"
-                                      onsubmit="return confirm('Hapus akun {{ akun.kode_akun }} - {{ akun.nama_akun }}?')">
+                                <a href="/akun/{{ a.kode_akun }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                                <form method="post" action="/akun/{{ a.kode_akun }}/hapus"
+                                      onsubmit="return confirm('Hapus akun {{ a.kode_akun }} - {{ a.nama_akun }}?')">
                                     <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
                                 </form>
                             </div>
                         </td>
                     </tr>
+                    {% endfor %}
+
+                    {# Untuk tiap kategori, tampilkan kategori + child akun di bawahnya #}
+                    {% for kat in kategori_list %}
+                        <tr style="background:#f8f9fa;">
+                            <td><code>{{ kat.kode_akun }}</code></td>
+                            <td colspan="6"><strong>📁 {{ kat.nama_akun }}</strong>
+                                <span class="text-muted" style="font-size:.78rem; margin-left:.4rem;">(kategori — tidak bisa dipilih di transaksi)</span>
+                            </td>
+                            <td>
+                                <div class="action-btns">
+                                    <a href="/akun/{{ kat.kode_akun }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                                    <form method="post" action="/akun/{{ kat.kode_akun }}/hapus"
+                                          onsubmit="return confirm('Hapus kategori {{ kat.kode_akun }} - {{ kat.nama_akun }}?')">
+                                        <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% for a in akun_dalam_jenis if a.parent_kode == kat.kode_akun %}
+                        <tr class="{% if not a.is_active %}row-inactive{% endif %}">
+                            <td style="padding-left:2rem;"><code>{{ a.kode_akun }}</code></td>
+                            <td>{{ a.nama_akun }}</td>
+                            <td class="text-muted">{{ a.nama_akun_en or '-' }}</td>
+                            <td class="text-center">
+                                <span class="badge badge-saldo-{{ a.saldo_normal }}">{{ a.saldo_normal | capitalize }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if a.is_kontra %}<span class="badge badge-kontra">Ya</span>{% else %}<span class="text-muted">-</span>{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if a.is_kategori %}
+                                <span class="badge badge-saldo-debet">Kategori</span>
+                                {% else %}
+                                <span class="text-muted" style="font-size:.78rem;">Detail</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if a.is_active %}<span class="badge badge-active">Aktif</span>{% else %}<span class="badge badge-inactive">Nonaktif</span>{% endif %}
+                            </td>
+                            <td>
+                                <div class="action-btns">
+                                    <a href="/akun/{{ a.kode_akun }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                                    <form method="post" action="/akun/{{ a.kode_akun }}/hapus"
+                                          onsubmit="return confirm('Hapus akun {{ a.kode_akun }} - {{ a.nama_akun }}?')">
+                                        <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -87,8 +217,17 @@
 {% endfor %}
 
 {% if not akun_list %}
-<div class="card" style="text-align:center; padding: 3rem;">
-    <p class="text-muted">Belum ada akun. <a href="/akun/tambah">Tambah akun pertama</a>.</p>
+<div class="card" style="text-align:center; padding:3rem;">
+    <p class="text-muted">Belum ada akun. <a href="/akun/tambah">Tambah akun/kategori pertama</a>.</p>
 </div>
 {% endif %}
+
+<div style="margin-top:1.5rem; padding:.85rem 1rem; background:#f8f9fa; border-radius:6px; font-size:.85rem; color:#5a6772;">
+    <strong>Tips:</strong>
+    <ul style="margin:.5rem 0 0 1.2rem; padding:0;">
+        <li><strong>Jenis Akun</strong> — kelompok tertinggi (Harta, Utang, dll.). Bisa tambah baru (mis. <em>Investasi</em>) untuk akun 6xx.</li>
+        <li><strong>Kategori</strong> (📁) — sub-grup dalam jenis yang sama (mis. Harta Lancar dalam Harta). Tidak bisa dipilih di form input transaksi.</li>
+        <li><strong>Akun Detail</strong> — leaf account yang bisa dipakai di transaksi. Otomatis di-link ke kategori parent berdasarkan prefix kode.</li>
+    </ul>
+</div>
 {% endblock %}

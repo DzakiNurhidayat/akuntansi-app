@@ -33,4 +33,18 @@ def apply_migrations(engine):
                     "ALTER TABLE akun ADD COLUMN is_universal BOOLEAN NOT NULL DEFAULT 0"
                 ))
 
+        # Migration: akun.is_kategori (Boolean) + akun.parent_kode (String FK)
+        if "akun" in existing_tables:
+            cols = {c["name"] for c in insp.get_columns("akun")}
+            if "is_kategori" not in cols:
+                print("[MIGRATE] Adding column akun.is_kategori")
+                conn.execute(text(
+                    "ALTER TABLE akun ADD COLUMN is_kategori BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            if "parent_kode" not in cols:
+                print("[MIGRATE] Adding column akun.parent_kode")
+                conn.execute(text(
+                    "ALTER TABLE akun ADD COLUMN parent_kode VARCHAR(10)"
+                ))
+
         conn.commit()

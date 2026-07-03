@@ -10,7 +10,7 @@ Jalankan SEKALI dulu sebelum seeder transaksi.
 """
 from app.database import Base, SessionLocal, engine
 from app.migrations import apply_migrations
-from app.models import Akun, Periode, User
+from app.models import Akun, JenisAkun, Periode, User
 from app.services.auth import hash_password
 
 
@@ -27,6 +27,27 @@ Base.metadata.create_all(bind=engine)
 print("  ✓ Schema OK")
 
 db = SessionLocal()
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 0b. Jenis Akun (Harta, Utang, Modal, Pendapatan, Beban)
+# ──────────────────────────────────────────────────────────────────────────────
+jenis_akun_data = [
+    {"kode": "aset",       "nama": "Harta",      "saldo_normal_default": "debet",  "urutan": 1},
+    {"kode": "kewajiban",  "nama": "Utang",      "saldo_normal_default": "kredit", "urutan": 2},
+    {"kode": "modal",      "nama": "Modal",      "saldo_normal_default": "kredit", "urutan": 3},
+    {"kode": "pendapatan", "nama": "Pendapatan", "saldo_normal_default": "kredit", "urutan": 4},
+    {"kode": "beban",      "nama": "Beban",      "saldo_normal_default": "debet",  "urutan": 5},
+]
+n_jenis = db.query(JenisAkun).count()
+if n_jenis:
+    print(f"\n[0b] Jenis akun sudah ada ({n_jenis} record). Skip.")
+else:
+    print(f"\n[0b] Seeding jenis akun (5 jenis standar)...")
+    for j in jenis_akun_data:
+        db.add(JenisAkun(**j, is_active=True))
+    db.commit()
+    print(f"  ✓ {len(jenis_akun_data)} jenis akun di-seed")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 1. Chart of Accounts (sesuai soal Cleaning Service April 2008)
@@ -157,6 +178,44 @@ kas = db.query(Akun).filter(Akun.kode_akun == "111").first()
 if kas and not kas.is_universal:
     kas.is_universal = True
     print(f"  ✓ Akun 111 (Kas) di-mark is_universal=True (bisa dipakai semua user)")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 5. Seed Kategori Akun (2-digit) + auto-link parent_kode untuk akun detail
+# ──────────────────────────────────────────────────────────────────────────────
+kategori_data = [
+    {"kode_akun": "11", "nama_akun": "Harta Lancar",          "jenis_akun": "aset",       "saldo_normal": "debet"},
+    {"kode_akun": "12", "nama_akun": "Harta Tidak Lancar",    "jenis_akun": "aset",       "saldo_normal": "debet"},
+    {"kode_akun": "21", "nama_akun": "Utang Lancar",          "jenis_akun": "kewajiban",  "saldo_normal": "kredit"},
+    {"kode_akun": "31", "nama_akun": "Modal Pemilik",         "jenis_akun": "modal",      "saldo_normal": "kredit"},
+    {"kode_akun": "41", "nama_akun": "Pendapatan Operasional","jenis_akun": "pendapatan", "saldo_normal": "kredit"},
+    {"kode_akun": "51", "nama_akun": "Beban Operasional",     "jenis_akun": "beban",      "saldo_normal": "debet"},
+]
+print("\n[upgrade] Seed kategori akun (2-digit, is_kategori=True)...")
+n_kat_baru = 0
+for k in kategori_data:
+    if not db.query(Akun).filter_by(kode_akun=k["kode_akun"]).first():
+        db.add(Akun(**k, is_kategori=True, is_active=True))
+        n_kat_baru += 1
+db.flush()
+if n_kat_baru:
+    print(f"  ✓ {n_kat_baru} kategori baru dibuat")
+else:
+    print(f"  (semua kategori sudah ada)")
+
+# Auto-link parent_kode untuk akun detail berdasarkan prefix 2-digit
+print("\n[upgrade] Auto-link parent_kode untuk akun detail...")
+n_linked = 0
+for akun in db.query(Akun).filter(Akun.is_kategori == False, Akun.parent_kode.is_(None)).all():
+    if len(akun.kode_akun) >= 3:
+        prefix2 = akun.kode_akun[:2]
+        parent = db.query(Akun).filter_by(kode_akun=prefix2, is_kategori=True).first()
+        if parent:
+            akun.parent_kode = prefix2
+            n_linked += 1
+if n_linked:
+    print(f"  ✓ {n_linked} akun detail di-link ke parent kategori")
+else:
+    print(f"  (semua akun sudah ter-link)")
 
 db.commit()
 db.close()

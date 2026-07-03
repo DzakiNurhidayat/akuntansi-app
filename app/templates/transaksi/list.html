@@ -83,18 +83,11 @@
                     </td>
                     <td>
                         <div class="action-btns">
-                            {% set closed = t.periode and t.periode.is_closed %}
-                            <a href="/transaksi/{{ t.id }}/edit"
-                               class="btn btn-sm btn-secondary"
-                               {% if closed %}title="Periode sudah ditutup — perubahan butuh Resync di Jurnal Penutup"{% endif %}>
-                                Edit{% if closed %} ⚠{% endif %}
-                            </a>
+                            <a href="/transaksi/{{ t.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
                             {% if t.jenis not in ('penutup', 'pembalik') %}
                             <form method="post" action="/transaksi/{{ t.id }}/hapus"
-                                  onsubmit="return confirm('Hapus transaksi #{{ t.id }} tanggal {{ t.tanggal }}?{% if closed %}\n\nPERHATIAN: periode sudah ditutup. Setelah hapus, klik &quot;Resync Tutup Buku&quot; di halaman Jurnal Penutup.{% endif %}')">
-                                <button type="submit" class="btn btn-sm btn-danger">
-                                    Hapus{% if closed %} ⚠{% endif %}
-                                </button>
+                                  onsubmit="return confirm('Hapus transaksi #{{ t.id }} tanggal {{ t.tanggal }}?')">
+                                <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
                             </form>
                             {% endif %}
                         </div>

@@ -4,9 +4,9 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>{% if akun %}Edit Akun{% else %}Tambah Akun{% endif %}</h1>
+        <h1>{% if akun %}Edit Akun{% else %}Tambah Akun / Kategori{% endif %}</h1>
         <p class="text-muted">
-            {% if akun %}Perbarui data akun {{ akun.kode_akun }}{% else %}Tambah akun baru ke Chart of Accounts{% endif %}
+            {% if akun %}Perbarui data akun <code>{{ akun.kode_akun }}</code>{% else %}Tambah akun detail atau kategori ke Chart of Accounts{% endif %}
         </p>
     </div>
     <a href="/akun" class="btn btn-secondary">← Kembali</a>
@@ -26,19 +26,20 @@
                 <input type="text" id="kode_akun" value="{{ akun.kode_akun }}" class="form-control" disabled>
                 {% else %}
                 <input type="text" id="kode_akun" name="kode_akun" class="form-control"
-                       placeholder="contoh: 111" maxlength="10" required
-                       value="{{ request.query_params.get('kode_akun', '') }}">
+                       placeholder="cth: 111 (detail) atau 11 (kategori)" maxlength="10" required>
+                <small class="help-text">2 digit untuk kategori, 3+ digit untuk akun detail (konvensi)</small>
                 {% endif %}
             </div>
 
             <div class="form-group">
                 <label for="jenis_akun">Jenis Akun <span class="required">*</span></label>
-                <select id="jenis_akun" name="jenis_akun" class="form-control" required onchange="updateSaldo()">
-                    {% for j in jenis_choices %}
-                    <option value="{{ j }}"
-                        {% if akun and akun.jenis_akun == j %}selected
+                <select id="jenis_akun" name="jenis_akun" class="form-control" required onchange="onJenisChange()">
+                    {% for j in jenis_options %}
+                    <option value="{{ j.kode }}"
+                            data-saldo="{{ j.saldo_normal_default }}"
+                        {% if akun and akun.jenis_akun == j.kode %}selected
                         {% elif not akun and loop.first %}selected{% endif %}>
-                        {{ j | capitalize }}
+                        {{ j.nama }}
                     </option>
                     {% endfor %}
                 </select>
@@ -49,14 +50,14 @@
             <div class="form-group">
                 <label for="nama_akun">Nama Akun (ID) <span class="required">*</span></label>
                 <input type="text" id="nama_akun" name="nama_akun" class="form-control"
-                       placeholder="contoh: Kas" maxlength="100" required
+                       placeholder="cth: Kas atau Harta Lancar" maxlength="100" required
                        value="{{ akun.nama_akun if akun else '' }}">
             </div>
 
             <div class="form-group">
                 <label for="nama_akun_en">Nama Akun (EN)</label>
                 <input type="text" id="nama_akun_en" name="nama_akun_en" class="form-control"
-                       placeholder="contoh: Cash" maxlength="100"
+                       placeholder="cth: Cash" maxlength="100"
                        value="{{ akun.nama_akun_en if akun and akun.nama_akun_en else '' }}">
             </div>
         </div>
@@ -68,7 +69,35 @@
                        value="{{ akun.saldo_normal if akun else 'debet' }}">
                 <div style="display:flex; align-items:center; gap:.6rem; height:38px;">
                     <span id="saldo_display" class="badge"></span>
-                    <small class="help-text">Otomatis sesuai jenis akun (kontra = kebalikan)</small>
+                    <small class="help-text">Otomatis dari jenis akun · is_kontra = kebalikan</small>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="parent_kode">Parent Kategori (opsional)</label>
+                <select id="parent_kode" name="parent_kode" class="form-control">
+                    <option value="">— Tidak ada parent —</option>
+                    {% for k in kategori_options %}
+                    <option value="{{ k.kode_akun }}" data-jenis="{{ k.jenis_akun }}"
+                        {% if akun and akun.parent_kode == k.kode_akun %}selected{% endif %}>
+                        {{ k.kode_akun }} — {{ k.nama_akun }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="help-text" id="parent-hint">Auto-filter sesuai jenis akun. Kosongkan untuk top-level.</small>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group checkboxes">
+                <label>Tipe Akun</label>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="is_kategori" name="is_kategori" value="true"
+                           {% if akun and akun.is_kategori %}checked{% endif %}
+                           onchange="onKategoriToggle()">
+                    <label for="is_kategori">Sebagai Kategori
+                        <small class="help-text">(grouping, tidak bisa dipilih di transaksi)</small>
+                    </label>
                 </div>
             </div>
 
@@ -78,9 +107,7 @@
                     <input type="checkbox" id="is_kontra" name="is_kontra" value="true"
                            {% if akun and akun.is_kontra %}checked{% endif %}
                            onchange="updateSaldo()">
-                    <label for="is_kontra">Akun Kontra
-                        <small class="help-text">(contoh: Akumulasi Penyusutan, Prive)</small>
-                    </label>
+                    <label for="is_kontra">Akun Kontra <small class="help-text">(cth: Akum Penyusutan, Prive)</small></label>
                 </div>
                 <div class="checkbox-item">
                     <input type="checkbox" id="is_active" name="is_active" value="true"
@@ -92,7 +119,7 @@
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">
-                {% if akun %}Simpan Perubahan{% else %}Tambah Akun{% endif %}
+                {% if akun %}Simpan Perubahan{% else %}Tambah{% endif %}
             </button>
             <a href="/akun" class="btn btn-secondary">Batal</a>
         </div>
@@ -100,19 +127,13 @@
 </div>
 
 <script>
-const SALDO_DEFAULT = {
-    aset:       'debet',
-    beban:      'debet',
-    kewajiban:  'kredit',
-    modal:      'kredit',
-    pendapatan: 'kredit'
-};
-
 function updateSaldo() {
-    const jenis    = document.getElementById('jenis_akun').value;
+    const jenisSel = document.getElementById('jenis_akun');
+    const opt = jenisSel.options[jenisSel.selectedIndex];
+    const defaultSaldo = opt.dataset.saldo || 'debet';
     const isKontra = document.getElementById('is_kontra').checked;
 
-    let saldo = SALDO_DEFAULT[jenis] || 'debet';
+    let saldo = defaultSaldo;
     if (isKontra) saldo = (saldo === 'debet') ? 'kredit' : 'debet';
 
     document.getElementById('saldo_normal').value = saldo;
@@ -122,9 +143,53 @@ function updateSaldo() {
     badge.className   = 'badge ' + (saldo === 'debet' ? 'badge-saldo-debet' : 'badge-saldo-kredit');
 }
 
-document.getElementById('jenis_akun').addEventListener('change', updateSaldo);
+function filterParentOptions() {
+    // Saat jenis berubah, parent dropdown filter — hanya tampilkan kategori dengan jenis yang sama
+    const jenisVal = document.getElementById('jenis_akun').value;
+    const parentSel = document.getElementById('parent_kode');
+    let foundCurrent = false;
+    for (const opt of parentSel.options) {
+        if (!opt.value) continue;
+        const matches = opt.dataset.jenis === jenisVal;
+        opt.hidden = !matches;
+        if (opt.selected && !matches) {
+            opt.selected = false;
+        }
+    }
+    // Reset ke "tidak ada parent" jika selected option ter-hide
+    if (parentSel.value && parentSel.options[parentSel.selectedIndex].hidden) {
+        parentSel.value = '';
+    }
+}
 
-// Init on page load
+function onJenisChange() {
+    updateSaldo();
+    filterParentOptions();
+}
+
+function onKategoriToggle() {
+    // Saat is_kategori dicentang: parent_kode di-disable + cleared
+    // Kategori tidak boleh punya parent kategori (struktur flat 1 level)
+    const isKategori = document.getElementById('is_kategori').checked;
+    const parentSel = document.getElementById('parent_kode');
+    const hint = document.getElementById('parent-hint');
+
+    parentSel.disabled = isKategori;
+    if (isKategori) {
+        parentSel.value = '';
+        parentSel.style.background = '#f4f4f4';
+        if (hint) hint.textContent = 'Kategori adalah top-level — parent tidak dapat dipilih.';
+    } else {
+        parentSel.style.background = '';
+        if (hint) hint.textContent = 'Auto-filter sesuai jenis akun. Kosongkan untuk top-level.';
+    }
+}
+
+document.getElementById('jenis_akun').addEventListener('change', onJenisChange);
+
+// Init
 updateSaldo();
+filterParentOptions();
+onKategoriToggle();
 </script>
 {% endblock %}

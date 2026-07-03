@@ -336,6 +336,11 @@ main.container {
     border-left: 4px solid #dc3545;
     color: #721c24;
 }
+.alert-warning {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+}
 
 /* ── Buttons ── */
 .btn {
@@ -713,6 +718,15 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 .akun-opt-nama { flex: 1; }
 .akun-opt-jenis { font-size: 0.7rem; }
+.akun-opt-parent {
+    font-size: 0.7rem;
+    color: #7f8c8d;
+    background: #f4f6f8;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    margin-right: 0.3rem;
+}
 
 /* ── Dashboard grid ── */
 .dash-grid {

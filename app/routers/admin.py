@@ -165,7 +165,7 @@ async def save_akun_assignment(
 
 # ─── Toggle akun universal ───────────────────────────────────────────────────
 @router.post("/akun/{kode_akun}/toggle-universal")
-def toggle_universal(kode_akun: str, db: Session = Depends(get_db)):
+def toggle_universal(kode_akun: str, request: Request, db: Session = Depends(get_db)):
     a = db.query(Akun).filter(Akun.kode_akun == kode_akun).first()
     if not a:
         return RedirectResponse("/akun?msg=Akun+tidak+ditemukan&type=error", 303)
@@ -173,6 +173,8 @@ def toggle_universal(kode_akun: str, db: Session = Depends(get_db)):
     a.is_universal = not a.is_universal
     db.commit()
     label = "universal" if a.is_universal else "non-universal"
+    referer = request.headers.get("referer", "/akun")
+    sep = "&" if "?" in referer else "?"
     return RedirectResponse(
-        f"/akun?msg=Akun+{kode_akun}+sekarang+{label}&type=success", 303,
+        f"{referer}{sep}msg=Akun+{kode_akun}+sekarang+{label}&type=success", 303,
     )
